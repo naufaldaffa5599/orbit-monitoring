@@ -1,0 +1,20 @@
+# ── Secrets & runtime config (contain credentials — never commit) ──
+.env
+devices.json
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── Claude Code local settings ──
+.claude/settings.local.json
+
+# ── OS / editor junk ──
+.DS_Store
+Thumbs.db
+*.swp
+*.log

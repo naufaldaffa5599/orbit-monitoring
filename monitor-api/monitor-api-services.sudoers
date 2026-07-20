@@ -1,0 +1,22 @@
+# Managed by: monitor-api dashboard "Services" tab.
+# Scope: ONLY start/stop/restart for these 5 whitelisted units — nothing else.
+# See sudoers-services.md for install/removal instructions.
+
+Cmnd_Alias MONITOR_SERVICES = \
+    /usr/bin/systemctl start monitor-api.service, \
+    /usr/bin/systemctl stop monitor-api.service, \
+    /usr/bin/systemctl restart monitor-api.service, \
+    /usr/bin/systemctl start poka-server.service, \
+    /usr/bin/systemctl stop poka-server.service, \
+    /usr/bin/systemctl restart poka-server.service, \
+    /usr/bin/systemctl start poka-watch.service, \
+    /usr/bin/systemctl stop poka-watch.service, \
+    /usr/bin/systemctl restart poka-watch.service, \
+    /usr/bin/systemctl start reminder-bot-backend.service, \
+    /usr/bin/systemctl stop reminder-bot-backend.service, \
+    /usr/bin/systemctl restart reminder-bot-backend.service, \
+    /usr/bin/systemctl start reminder-bot-frontend.service, \
+    /usr/bin/systemctl stop reminder-bot-frontend.service, \
+    /usr/bin/systemctl restart reminder-bot-frontend.service
+
+daffa ALL=(root) NOPASSWD: MONITOR_SERVICES

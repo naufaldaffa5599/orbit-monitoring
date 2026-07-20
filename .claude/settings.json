@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(kill 6909)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "Bash(chromium-cli --help)",
+      "Bash(python3 -c \"import playwright\")",
+      "Bash(pip3 show *)",
+      "Bash(npx --yes playwright --version)",
+      "Bash(find / -maxdepth 6 -iname \"*playwright*\" -type d 2>/dev/null | grep -v proc | head -20 *)",
+      "Read(//home/daffa/.cache/**)",
+      "Bash(npx --yes playwright install chromium --with-deps)",
+      "Bash(fuser 8585/tcp)",
+      "Bash(sudo -n systemctl restart monitor-api)",
+      "Bash(node --check app.js)",
+      "Bash(API_PORT=8586 nohup .venv/bin/python -u server.py)",
+      "Bash(echo \"pid $!\")",
+      "Bash(curl -sf http://localhost:8586/api/devices)"
+    ]
+  }
+}

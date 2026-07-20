@@ -1,0 +1,16 @@
+[Unit]
+Description=Monitor Hub API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daffa
+WorkingDirectory=/home/daffa/projects/monitoring/monitor-api
+EnvironmentFile=/home/daffa/projects/monitoring/monitor-api/.env
+ExecStart=/home/daffa/projects/monitoring/monitor-api/.venv/bin/python -u server.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

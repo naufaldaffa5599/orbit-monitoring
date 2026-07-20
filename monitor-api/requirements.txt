@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+psutil
+python-dotenv
+paramiko

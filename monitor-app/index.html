@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#ffd93d">
+    <meta name="description" content="System Metrics & Device SSH Access">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=16">
+    <title>Monitor Hub</title>
+</head>
+
+<body>
+    <!-- MAIN APP -->
+    <div id="app" class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="header-logo">🛡️</div>
+                <div>
+                    <h1 class="header-title">Monitor Hub</h1>
+                    <p class="header-sub" id="last-update">Last update: —</p>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="refresh-indicator" id="refresh-indicator" title="Auto-refresh active">
+                    <div class="pulse-dot"></div>
+                    <span>LIVE</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="system">
+                <span class="tab-icon">💻</span>
+                <span class="tab-label">System</span>
+            </button>
+            <button class="tab" data-tab="services">
+                <span class="tab-icon">⚙️</span>
+                <span class="tab-label">Services</span>
+            </button>
+            <button class="tab" data-tab="devices">
+                <span class="tab-icon">🔌</span>
+                <span class="tab-label">Devices</span>
+            </button>
+        </nav>
+
+        <!-- TAB: System -->
+        <main class="content" id="tab-system">
+            <div class="section-header">
+                <h2>System — This Host</h2>
+                <span class="badge" id="sys-hostname">—</span>
+            </div>
+
+            <div class="metrics-grid" id="system-metrics">
+                <div class="metric-card cpu-card">
+                    <div class="metric-header">
+                        <span class="metric-icon">⚡</span>
+                        <span class="metric-label">CPU</span>
+                    </div>
+                    <div class="metric-ring-wrapper">
+                        <svg class="ring" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="52" class="ring-bg" />
+                            <circle cx="60" cy="60" r="52" class="ring-fill" id="cpu-ring" />
+                        </svg>
+                        <div class="ring-value" id="cpu-value">—%</div>
+                    </div>
+                    <div class="metric-detail" id="cpu-detail">— cores · Load —</div>
+                </div>
+
+                <div class="metric-card ram-card">
+                    <div class="metric-header">
+                        <span class="metric-icon">🧠</span>
+                        <span class="metric-label">RAM</span>
+                    </div>
+                    <div class="metric-ring-wrapper">
+                        <svg class="ring" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="52" class="ring-bg" />
+                            <circle cx="60" cy="60" r="52" class="ring-fill" id="ram-ring" />
+                        </svg>
+                        <div class="ring-value" id="ram-value">—%</div>
+                    </div>
+                    <div class="metric-detail" id="ram-detail">— / — GB</div>
+                </div>
+
+                <div class="metric-card disk-card">
+                    <div class="metric-header">
+                        <span class="metric-icon">💾</span>
+                        <span class="metric-label">Disk</span>
+                    </div>
+                    <div class="metric-ring-wrapper">
+                        <svg class="ring" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="52" class="ring-bg" />
+                            <circle cx="60" cy="60" r="52" class="ring-fill" id="disk-ring" />
+                        </svg>
+                        <div class="ring-value" id="disk-value">—%</div>
+                    </div>
+                    <div class="metric-detail" id="disk-detail">— / — GB</div>
+                </div>
+
+                <div class="metric-card temp-card">
+                    <div class="metric-header">
+                        <span class="metric-icon">🌡️</span>
+                        <span class="metric-label">Temp</span>
+                    </div>
+                    <div class="temp-value" id="temp-value">—°C</div>
+                    <div class="metric-detail" id="temp-detail">—</div>
+                </div>
+            </div>
+
+            <div class="info-row">
+                <div class="info-item">
+                    <span class="info-label">Uptime</span>
+                    <span class="info-value" id="sys-uptime">—</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Network ▲</span>
+                    <span class="info-value" id="net-sent">—</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Network ▼</span>
+                    <span class="info-value" id="net-recv">—</span>
+                </div>
+            </div>
+
+            <!-- Mini chart -->
+            <div class="chart-section">
+                <h3>CPU & RAM — Last Hour</h3>
+                <canvas id="history-chart" height="180"></canvas>
+            </div>
+
+            <!-- Top processes (task-manager style) -->
+            <div class="proc-section">
+                <div class="proc-header">
+                    <h3>Top Processes</h3>
+                    <div class="proc-toggle">
+                        <button class="proc-toggle-btn active" data-proc-sort="cpu">CPU</button>
+                        <button class="proc-toggle-btn" data-proc-sort="ram">RAM</button>
+                    </div>
+                </div>
+                <div class="proc-list" id="proc-list">
+                    <div class="skeleton-card"></div>
+                </div>
+            </div>
+        </main>
+
+        <!-- TAB: Services (systemd control) -->
+        <main class="content hidden" id="tab-services">
+            <div class="section-header">
+                <h2>Services — This Host</h2>
+                <span class="badge" id="service-count">—</span>
+            </div>
+            <div class="bot-grid" id="service-grid">
+                <!-- Filled by JS -->
+                <div class="skeleton-card"></div>
+            </div>
+        </main>
+
+        <!-- TAB: Devices (SSH terminal) -->
+        <main class="content hidden" id="tab-devices">
+            <div class="section-header">
+                <h2>Devices</h2>
+                <div class="section-header-actions">
+                    <span class="badge" id="device-count">—</span>
+                    <button class="btn-add-device" id="btn-add-device">+ Add</button>
+                </div>
+            </div>
+            <div class="bot-grid" id="device-grid">
+                <!-- Filled by JS -->
+                <div class="skeleton-card"></div>
+            </div>
+        </main>
+
+        <!-- Toast notifications -->
+        <div id="toast-container" class="toast-container"></div>
+    </div>
+
+    <!-- Add device modal -->
+    <div class="modal-overlay hidden" id="device-modal-overlay">
+        <div class="modal-box">
+            <h3>Tambah Device</h3>
+            <form id="device-form">
+                <label>Nama
+                    <input type="text" id="d-label" required placeholder="mis. Laptop Windows">
+                </label>
+                <div class="form-row">
+                    <label>Icon (emoji)
+                        <input type="text" id="d-icon" placeholder="🖥️" maxlength="4">
+                    </label>
+                    <label>OS
+                        <select id="d-os">
+                            <option value="linux">Linux</option>
+                            <option value="windows">Windows</option>
+                        </select>
+                    </label>
+                </div>
+                <label>Cara Akses
+                    <select id="d-protocol">
+                        <option value="ssh">SSH Terminal</option>
+                        <option value="wol">Wake on LAN</option>
+                    </select>
+                </label>
+                <div class="form-row" id="d-host-wrap">
+                    <label class="grow">Host / IP
+                        <input type="text" id="d-host" required placeholder="192.168.1.50">
+                    </label>
+                    <label id="d-port-wrap">Port
+                        <input type="number" id="d-port" value="22">
+                    </label>
+                </div>
+                <label id="d-username-wrap">Username
+                    <input type="text" id="d-username" required placeholder="mis. daffa">
+                </label>
+                <label id="d-mac-wrap" class="hidden">MAC Address
+                    <input type="text" id="d-mac" placeholder="AA:BB:CC:DD:EE:FF">
+                </label>
+                <label id="d-ssh-power-wrap" class="checkbox-row hidden">
+                    <input type="checkbox" id="d-ssh-power">
+                    <span>Aktifkan kontrol SSH (Restart/Shutdown) — perlu OpenSSH Server aktif di device ini</span>
+                </label>
+                <label id="d-authtype-wrap">Metode Auth
+                    <select id="d-auth-type">
+                        <option value="password">Password</option>
+                        <option value="key">SSH Key (path file di server)</option>
+                    </select>
+                </label>
+                <label id="d-password-wrap">Password
+                    <input type="password" id="d-password" autocomplete="new-password">
+                </label>
+                <label id="d-key-wrap" class="hidden">Path Private Key (di server ini)
+                    <input type="text" id="d-key-path" placeholder="/home/daffa/.ssh/id_ed25519">
+                </label>
+                <p class="modal-hint" id="d-error"></p>
+                <div class="modal-actions">
+                    <button type="button" class="btn-modal-cancel" id="d-cancel">Batal</button>
+                    <button type="submit" class="btn-modal-save" id="d-submit">Simpan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Service logs modal -->
+    <div class="modal-overlay hidden" id="logs-modal-overlay">
+        <div class="modal-box logs-modal-box">
+            <div class="logs-modal-header">
+                <h3 id="logs-modal-title">Logs</h3>
+                <div class="logs-modal-header-actions">
+                    <span class="live-dot" id="logs-live-dot" title="Live"></span>
+                    <button type="button" class="btn-icon" id="logs-close">✕</button>
+                </div>
+            </div>
+            <pre class="logs-box" id="logs-box"></pre>
+        </div>
+    </div>
+
+    <!-- Process detail modal -->
+    <div class="modal-overlay hidden" id="proc-modal-overlay">
+        <div class="modal-box proc-modal-box">
+            <div class="logs-modal-header">
+                <h3 id="proc-modal-title">Detail Proses</h3>
+                <button type="button" class="btn-icon" id="proc-modal-close">✕</button>
+            </div>
+            <div id="proc-modal-body"></div>
+        </div>
+    </div>
+
+    <script src="app.js?v=23"></script>
+</body>
+
+</html>

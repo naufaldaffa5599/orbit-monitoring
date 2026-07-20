@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffd93d">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+    <title>Terminal</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+        :root {
+            --ink: #16130e;
+            --cream: #fff4e0;
+            --yellow: #ffd93d;
+            --accent: #7c5cff;
+            --green-fill: #4ade80;
+            --red-fill: #ff7a70;
+            --screen: #0a0e1a;
+            --bw: 3px;
+            --shadow: 3px 3px 0 var(--ink);
+            --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            --mono: ui-monospace, "SF Mono", Menlo, monospace;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--cream);
+            font-family: var(--font);
+            overflow: hidden;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Top bar — bright yellow block like the dashboard header */
+        .bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex: 0 0 auto;
+            height: 52px;
+            padding: 0 1rem;
+            background: var(--yellow);
+            border-bottom: var(--bw) solid var(--ink);
+            color: var(--ink);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .bar .bar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            min-width: 0;
+        }
+
+        .bar .bar-left #title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .bar .btn-back {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            height: 34px;
+            padding: 0 0.7rem;
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--ink);
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: var(--shadow);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        .bar .btn-back:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        .bar .status {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            border: 2px solid var(--ink);
+            background: #fff;
+            color: var(--ink);
+        }
+
+        .bar .status.connected { background: var(--green-fill); }
+        .bar .status.disconnected { background: var(--red-fill); }
+
+        .bar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex: 0 0 auto;
+        }
+
+        .btn-keys-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--ink);
+            font-size: 1rem;
+            line-height: 1;
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: var(--shadow);
+            transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s;
+        }
+
+        .btn-keys-toggle:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        /* pressed-in look while the keybar is hidden */
+        .btn-keys-toggle.active {
+            background: var(--accent);
+            color: #fff;
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        /* Tab bar — one independent terminal session per tab, all to the
+           same device. Wraps a scrollable row instead of shrinking tabs. */
+        .tabbar {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.5rem;
+            background: var(--cream);
+            border-bottom: var(--bw) solid var(--ink);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            height: 2.2rem;
+            padding: 0 0.45rem 0 0.75rem;
+            border-radius: 8px;
+            border: var(--bw) solid var(--ink);
+            background: #fff;
+            color: var(--ink);
+            font-size: 0.78rem;
+            font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
+            touch-action: manipulation;
+            white-space: nowrap;
+            box-shadow: var(--shadow);
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .tab-close {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.4rem;
+            height: 1.4rem;
+            border-radius: 5px;
+            border: 2px solid var(--ink);
+            background: rgba(255, 255, 255, 0.5);
+            font-size: 0.8rem;
+            line-height: 1;
+        }
+
+        .tab-btn.active .tab-close {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: #fff;
+        }
+
+        .tab-close:active {
+            background: var(--red-fill);
+        }
+
+        .btn-add-tab {
+            flex: 0 0 auto;
+            width: 2.2rem;
+            height: 2.2rem;
+            border-radius: 8px;
+            border: var(--bw) solid var(--ink);
+            background: var(--green-fill);
+            color: var(--ink);
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            touch-action: manipulation;
+            box-shadow: var(--shadow);
+        }
+
+        .btn-add-tab:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        /* Virtual key toolbar — for devices with no physical Ctrl/Esc/arrows (mobile).
+           Wraps instead of scrolling: a scrollable row makes any finger jitter
+           during a tap register as a scroll gesture, which cancels the click. */
+        .keybar {
+            flex: 0 0 auto;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            padding: 0.6rem 0.5rem;
+            background: var(--cream);
+            border-bottom: var(--bw) solid var(--ink);
+        }
+
+        /* minimized: reclaim the screen space the keybar took */
+        body.keys-collapsed .keybar {
+            display: none;
+        }
+
+        .keybar button {
+            flex: 0 0 auto;
+            min-width: 2.9rem;
+            height: 2.9rem;
+            padding: 0 0.75rem;
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--ink);
+            font-family: var(--mono);
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            user-select: none;
+            touch-action: manipulation;
+            box-shadow: var(--shadow);
+            transition: transform 0.08s ease, box-shadow 0.08s ease;
+        }
+
+        .keybar button:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        .keybar button.active {
+            background: var(--accent);
+            color: #fff;
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        .keybar .sep {
+            flex: 0 0 auto;
+            width: var(--bw);
+            align-self: stretch;
+            background: var(--ink);
+            margin: 0.2rem 0.15rem;
+            border-radius: 2px;
+        }
+
+        /* Terminal region — dark "screen" (xterm background is #0a0e1a, set in JS) */
+        #terminals-container {
+            flex: 1 1 auto;
+            min-height: 0;
+            position: relative;
+            background: var(--screen);
+        }
+
+        .term-pane {
+            position: absolute;
+            inset: 0;
+            padding: 0.5rem;
+            display: none;
+            /* we drive scroll + selection ourselves via touch handlers, so the
+               browser must not hijack the drag as a native pan/zoom */
+            touch-action: none;
+        }
+
+        .term-pane.active {
+            display: block;
+        }
+
+        /* Toast — brief feedback for copy/paste actions */
+        .toast {
+            position: fixed;
+            left: 50%;
+            bottom: 1.5rem;
+            transform: translateX(-50%);
+            background: #fff;
+            color: var(--ink);
+            padding: 0.6rem 1rem;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            border: var(--bw) solid var(--ink);
+            box-shadow: var(--shadow);
+            z-index: 80;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+        .toast.show { opacity: 1; }
+
+        /* Paste overlay — a real <textarea> so the phone's native long-press
+           "Tempel" (Paste) menu works, unlike the canvas-rendered terminal. */
+        .paste-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(22, 19, 14, 0.5);
+            display: flex;
+            align-items: flex-end;
+            z-index: 90;
+        }
+        .paste-overlay.hidden { display: none; }
+
+        .paste-box {
+            width: 100%;
+            background: var(--cream);
+            border-top: var(--bw) solid var(--ink);
+            padding: 0.85rem;
+            padding-bottom: calc(0.85rem + env(safe-area-inset-bottom));
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+        }
+
+        .paste-label {
+            color: var(--ink);
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        #paste-input {
+            width: 100%;
+            min-height: 6rem;
+            background: #fff;
+            color: var(--ink);
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            padding: 0.6rem;
+            font-family: var(--mono);
+            font-size: 0.9rem;
+            resize: vertical;
+        }
+
+        .paste-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.6rem;
+        }
+
+        .paste-actions button {
+            padding: 0.55rem 1.1rem;
+            border-radius: 8px;
+            border: var(--bw) solid var(--ink);
+            background: #fff;
+            color: var(--ink);
+            font-weight: 700;
+            font-family: var(--font);
+            box-shadow: var(--shadow);
+            cursor: pointer;
+        }
+
+        .paste-actions button:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        #paste-send {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * { transition-duration: 0.01ms !important; }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="bar">
+        <div class="bar-left">
+            <a href="index.html" class="btn-back" id="btn-back">← Dashboard</a>
+            <span id="title">Terminal</span>
+        </div>
+        <div class="bar-right">
+            <button class="btn-keys-toggle" id="btn-keys-toggle" title="Sembunyikan / tampilkan tombol" aria-label="Sembunyikan atau tampilkan bar tombol">⌨</button>
+            <span class="status" id="status">connecting…</span>
+        </div>
+    </div>
+
+    <div class="tabbar" id="tabbar">
+        <button class="btn-add-tab" id="btn-add-tab" title="Terminal baru">+</button>
+    </div>
+
+    <div class="keybar" id="keybar">
+        <button data-key="Escape">Esc</button>
+        <button data-key="Tab">Tab</button>
+        <button id="btn-ctrl" data-toggle="ctrl">Ctrl</button>
+        <button id="btn-shift" data-toggle="shift">Shift</button>
+        <button id="btn-alt" data-toggle="alt">Alt</button>
+        <div class="sep"></div>
+        <button data-key="ArrowUp">↑</button>
+        <button data-key="ArrowDown">↓</button>
+        <button data-key="ArrowLeft">←</button>
+        <button data-key="ArrowRight">→</button>
+        <div class="sep"></div>
+        <button data-key="Home">Home</button>
+        <button data-key="End">End</button>
+        <div class="sep"></div>
+        <button data-quick="c">^C</button>
+        <button data-quick="d">^D</button>
+        <button data-quick="l">^L</button>
+        <button data-quick="z">^Z</button>
+        <div class="sep"></div>
+        <button id="btn-select" data-toggle="select">👆 Select</button>
+        <button id="btn-copy">📋 Copy</button>
+        <button id="btn-paste">📥 Paste</button>
+    </div>
+
+    <div id="terminals-container"></div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="paste-overlay hidden" id="paste-overlay">
+        <div class="paste-box">
+            <div class="paste-label">Tempel teks (tekan lama di kotak buat munculin menu Tempel), lalu Kirim</div>
+            <textarea id="paste-input" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Tempel di sini…"></textarea>
+            <div class="paste-actions">
+                <button id="paste-cancel">Batal</button>
+                <button id="paste-send">Kirim</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script>
+        const params = new URLSearchParams(location.search);
+        const deviceId = params.get("id");
+        const label = params.get("label") || deviceId || "Terminal";
+        document.title = `${label} — Terminal`;
+        document.getElementById("title").textContent = label;
+
+        // Which tabs (session ids) are open for this device is remembered in
+        // localStorage. Closing this whole browser tab/window (e.g. the
+        // ← Dashboard button, or just closing Chrome) used to silently lose
+        // every session — the SSH shells actually kept running server-side
+        // for hours, but there was no way left to get back to them, since
+        // clicking Connect again minted a brand new random session id. Now
+        // reopening the same device restores every tab that was open,
+        // reattaching each one to its still-alive shell with history intact.
+        const STORAGE_KEY = `terminal-tabs:${deviceId}`;
+        function loadSavedSessionIds() {
+            try {
+                const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+                return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+            } catch (e) {
+                return [];
+            }
+        }
+        function saveSessionIds() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs.map((t) => t.sessionId)));
+            } catch (e) { /* storage full/unavailable — worst case just don't persist */ }
+        }
+
+        // If this tab was opened from the dashboard (window.open), just close
+        // it to return straight to that already-open tab. Otherwise (direct
+        // link, bookmark, reload) fall back to the <a href="index.html"> the
+        // button already is.
+        document.getElementById("btn-back").addEventListener("click", (e) => {
+            if (window.opener && !window.opener.closed) {
+                e.preventDefault();
+                window.close();
+            }
+        });
+
+        const statusEl = document.getElementById("status");
+        const setStatus = (text, cls) => {
+            statusEl.textContent = text;
+            statusEl.className = `status ${cls || ""}`;
+        };
+
+        const toastEl = document.getElementById("toast");
+        let toastTimer = null;
+        function showToast(msg) {
+            toastEl.textContent = msg;
+            toastEl.classList.add("show");
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1800);
+        }
+
+        function fallbackCopy(text) {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            ta.style.top = "0";
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+            document.body.removeChild(ta);
+        }
+
+        function copyText(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+            } else {
+                fallbackCopy(text);
+            }
+        }
+
+        const pasteOverlay = document.getElementById("paste-overlay");
+        const pasteInput = document.getElementById("paste-input");
+        function openPasteOverlay() {
+            pasteOverlay.classList.remove("hidden");
+            pasteInput.value = "";
+            pasteInput.focus();
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                navigator.clipboard.readText().then((t) => {
+                    if (t) pasteInput.value = t;
+                }).catch(() => { /* no permission / insecure context — user pastes manually */ });
+            }
+        }
+        function closePasteOverlay() {
+            pasteOverlay.classList.add("hidden");
+            activeTab() && activeTab().term.focus();
+        }
+        document.getElementById("paste-send").addEventListener("click", () => {
+            const text = pasteInput.value;
+            const tab = activeTab();
+            if (text && tab && tab.ws && tab.ws.readyState === WebSocket.OPEN) tab.ws.send(text);
+            closePasteOverlay();
+        });
+        document.getElementById("paste-cancel").addEventListener("click", closePasteOverlay);
+
+        // ── Named-key sequences + xterm CSI modifier codes ───────────────────
+        const NAMED_KEY_SEQ = {
+            Escape: "\x1b", Tab: "\t",
+            Home: "\x1b[H", End: "\x1b[F",
+            ArrowUp: "\x1b[A", ArrowDown: "\x1b[B",
+            ArrowRight: "\x1b[C", ArrowLeft: "\x1b[D",
+        };
+        const CSI_LETTER = {
+            ArrowUp: "A", ArrowDown: "B", ArrowRight: "C", ArrowLeft: "D",
+            Home: "H", End: "F",
+        };
+        function ctrlCode(letter) {
+            return String.fromCharCode(letter.toUpperCase().charCodeAt(0) & 0x1f);
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Tabs — each is a fully independent terminal session (own Terminal
+        // instance, own websocket/SSH session on the backend via a unique
+        // session id, own Ctrl/Shift/Alt/Select-mode state). The keybar,
+        // toast, and paste overlay are shared UI that always act on whichever
+        // tab is currently active.
+        // ═══════════════════════════════════════════════════════════════════
+        const tabs = [];
+        let activeTabId = null;
+        let tabCounter = 0;
+
+        function activeTab() {
+            return tabs.find((t) => t.id === activeTabId) || null;
+        }
+
+        function updateModifierUI() {
+            const tab = activeTab();
+            const on = !!tab;
+            document.getElementById("btn-ctrl").classList.toggle("active", on && tab.ctrlActive);
+            document.getElementById("btn-shift").classList.toggle("active", on && tab.shiftActive);
+            document.getElementById("btn-alt").classList.toggle("active", on && tab.altActive);
+            document.getElementById("btn-select").classList.toggle("active", on && tab.selectModeActive);
+        }
+
+        function modifierCode(tab) {
+            let n = 1;
+            if (tab.shiftActive) n += 1;
+            if (tab.altActive) n += 2;
+            if (tab.ctrlActive) n += 4;
+            return n;
+        }
+
+        function namedKeySequence(tab, key) {
+            if (key === "Escape") return NAMED_KEY_SEQ.Escape;
+            if (key === "Tab") return tab.shiftActive ? "\x1b[Z" : "\t";
+            const code = modifierCode(tab);
+            if (code === 1) return NAMED_KEY_SEQ[key];
+            return `\x1b[1;${code}${CSI_LETTER[key]}`;
+        }
+
+        function sendRaw(tab, bytes) {
+            if (tab.ws && tab.ws.readyState === WebSocket.OPEN) tab.ws.send(bytes);
+            tab.term.focus();
+        }
+
+        function copySelection(tab) {
+            const sel = tab.term.getSelection();
+            if (!sel) {
+                showToast("Select teks dulu (tap 👆 Select lalu geser)");
+                return;
+            }
+            copyText(sel);
+            showToast(`Disalin (${sel.length} karakter)`);
+            tab.term.focus();
+        }
+
+        function newSessionId() {
+            return (crypto.randomUUID && crypto.randomUUID()) ||
+                `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        }
+
+        // Tab labels reflect current POSITION ("Tab 1", "Tab 2", ...), not an
+        // ever-incrementing counter — closing tabs down to one and opening a
+        // new one should read "Tab 2" again, not "Tab 6". tabCounter is only
+        // used to build a unique internal id, it never appears in the UI.
+        function relabelTabs() {
+            tabs.forEach((t, i) => {
+                t.label = `Tab ${i + 1}`;
+                t.tabBtn.querySelector(".tab-label").textContent = t.label;
+            });
+        }
+
+        function createTab(sessionId) {
+            tabCounter++;
+            const tabId = `t${tabCounter}`;
+
+            const paneEl = document.createElement("div");
+            paneEl.className = "term-pane";
+            document.getElementById("terminals-container").appendChild(paneEl);
+
+            const tabBtn = document.createElement("button");
+            tabBtn.className = "tab-btn";
+            tabBtn.dataset.tabId = tabId;
+            tabBtn.innerHTML = `<span class="tab-label"></span><span class="tab-close" data-close>×</span>`;
+            document.getElementById("tabbar").insertBefore(tabBtn, document.getElementById("btn-add-tab"));
+
+            const term = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                theme: { background: "#0a0e1a" },
+            });
+            const fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            term.open(paneEl);
+
+            const tab = {
+                id: tabId,
+                sessionId: sessionId || newSessionId(),
+                paneEl, tabBtn,
+                term, fitAddon,
+                ws: null,
+                reconnectAttempts: 0,
+                reconnectTimer: null,
+                ctrlActive: false,
+                shiftActive: false,
+                altActive: false,
+                selectModeActive: false,
+            };
+            tabs.push(tab);
+            relabelTabs();
+            saveSessionIds();
+
+            tabBtn.addEventListener("click", (e) => {
+                if (e.target.closest("[data-close]")) {
+                    closeTab(tab.id);
+                } else {
+                    switchTab(tab.id);
+                }
+            });
+
+            wireTabInput(tab);
+            setupTouchSelection(tab);
+            switchTab(tab.id);
+            connectTab(tab);
+            return tab;
+        }
+
+        function switchTab(tabId) {
+            activeTabId = tabId;
+            tabs.forEach((t) => {
+                const isActive = t.id === tabId;
+                t.paneEl.classList.toggle("active", isActive);
+                t.tabBtn.classList.toggle("active", isActive);
+            });
+            updateModifierUI();
+            const tab = activeTab();
+            if (tab) {
+                tab.fitAddon.fit();
+                tab.term.refresh(0, tab.term.rows - 1);
+                tab.term.focus();
+                setStatus(...(tab.wsStatus || ["connecting…", ""]));
+            }
+        }
+
+        function closeTab(tabId) {
+            const idx = tabs.findIndex((t) => t.id === tabId);
+            if (idx === -1) return;
+            const [tab] = tabs.splice(idx, 1);
+            clearTimeout(tab.reconnectTimer);
+            if (tab.ws) {
+                tab.ws.onclose = null; // don't trigger reconnect logic on manual close
+                tab.ws.close();
+            }
+            tab.term.dispose();
+            tab.paneEl.remove();
+            tab.tabBtn.remove();
+            relabelTabs();
+            saveSessionIds();
+
+            if (tabs.length === 0) {
+                createTab(); // never end up with zero tabs
+                return;
+            }
+            if (activeTabId === tabId) {
+                const next = tabs[idx] || tabs[idx - 1] || tabs[0];
+                switchTab(next.id);
+            }
+        }
+
+        document.getElementById("btn-add-tab").addEventListener("click", () => createTab());
+
+        function connectTab(tab) {
+            clearTimeout(tab.reconnectTimer);
+            tab.reconnectTimer = null;
+            tab.term.reset();
+            const setTabStatus = (text, cls) => {
+                tab.wsStatus = [text, cls];
+                if (activeTabId === tab.id) setStatus(text, cls);
+            };
+            setTabStatus("connecting…", "");
+
+            const wsBase = location.origin.replace(/^http/, "ws");
+            const ws = new WebSocket(`${wsBase}/ws/ssh/${encodeURIComponent(deviceId)}/${encodeURIComponent(tab.sessionId)}`);
+            tab.ws = ws;
+
+            ws.onopen = () => {
+                tab.reconnectAttempts = 0;
+                setTabStatus("connected", "connected");
+                tab.fitAddon.fit();
+                ws.send(JSON.stringify({ type: "resize", cols: tab.term.cols, rows: tab.term.rows }));
+            };
+            ws.onmessage = (e) => tab.term.write(e.data);
+            ws.onclose = () => {
+                setTabStatus("disconnected", "disconnected");
+                scheduleReconnect(tab);
+            };
+            ws.onerror = () => setTabStatus("error", "disconnected");
+        }
+
+        function scheduleReconnect(tab) {
+            if (tab.reconnectTimer) return;
+            tab.reconnectAttempts++;
+            const delay = Math.min(1000 * tab.reconnectAttempts, 5000);
+            tab.wsStatus = ["reconnecting…", "disconnected"];
+            if (activeTabId === tab.id) setStatus("reconnecting…", "disconnected");
+            tab.reconnectTimer = setTimeout(() => connectTab(tab), delay);
+        }
+
+        // Mobile browsers suspend/kill websockets when the page goes to
+        // background; reconnect every tab as soon as it's visible again
+        // instead of waiting for each one's backoff timer.
+        document.addEventListener("visibilitychange", () => {
+            if (document.visibilityState !== "visible") return;
+            tabs.forEach((tab) => {
+                if (!tab.ws || tab.ws.readyState === WebSocket.CLOSED) connectTab(tab);
+            });
+        });
+
+        function wireTabInput(tab) {
+            tab.term.onData((data) => {
+                if (!tab.ws || tab.ws.readyState !== WebSocket.OPEN) return;
+
+                if (tab.ctrlActive && data.length === 1) {
+                    tab.ws.send(ctrlCode(data));
+                    return;
+                }
+                if (tab.altActive) {
+                    tab.altActive = false;
+                    if (activeTabId === tab.id) updateModifierUI();
+                    tab.ws.send("\x1b" + data);
+                    return;
+                }
+                tab.ws.send(data);
+            });
+        }
+
+        // xterm.js has its own touchstart/touchmove listener bound on
+        // term.element (a descendant of the pane) that manually scrolls the
+        // viewport on drag — independent of preventDefault. Left alone, it
+        // fights a selection drag: the buffer scrolls under the finger
+        // mid-drag, landing the selection on the wrong text. Registering our
+        // listeners with capture:true on the ANCESTOR (the pane) lets us
+        // intercept and stopPropagation() the touch before it ever reaches
+        // xterm's own (descendant, bubble-phase) listener.
+        function setupTouchSelection(tab) {
+            const container = tab.paneEl;
+            const target = tab.term.element.querySelector(".xterm-screen") || tab.term.element;
+
+            // One-finger touch behaviour on the terminal (when NOT in select mode):
+            //   • drag  → scroll the scrollback
+            //   • tap   → focus the terminal so the mobile keyboard opens
+            // The catch: xterm focuses its input the instant a finger lands
+            // (touchstart), so a scroll drag used to pop the keyboard AND not
+            // scroll. We swallow xterm's touchstart on the ancestor pane
+            // (capture phase) so it never auto-focuses, then decide tap-vs-drag
+            // on move: a real drag scrolls and suppresses the synthesised
+            // mouse/click (no keyboard); a plain tap re-focuses to type.
+            // Select mode keeps its drag-to-select behaviour unchanged.
+            let dragScrolling = false;
+            let dragMoved = false;
+            let dragStartY = 0;
+            let dragLastY = 0;
+            const DRAG_THRESHOLD = 6;
+
+            function scrollByWheel(px, touch) {
+                // Mirror a real mouse-wheel / trackpad by dispatching a synthetic
+                // wheel event onto the same element xterm binds its wheel handler
+                // to (the screen element — proven by select mode, which drives
+                // xterm's mouse listeners on this same node). xterm then does
+                // exactly what it does on the laptop wheel: scroll the scrollback
+                // when there is one, OR — for a full-screen TUI like `claude`
+                // that has no scrollback — translate it into the arrow-key /
+                // mouse sequences the app itself understands and scrolls with.
+                // Finger dragged down (px > 0) reveals OLDER output = wheel up =
+                // negative deltaY.
+                target.dispatchEvent(new WheelEvent("wheel", {
+                    deltaY: -px,
+                    deltaMode: 0, // pixels, like a trackpad
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: touch.clientX,
+                    clientY: touch.clientY,
+                }));
+            }
+
+            function fireMouse(type, touch) {
+                target.dispatchEvent(new MouseEvent(type, {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    detail: 1, // xterm's SelectionService only starts a selection when detail===1
+                    clientX: touch.clientX,
+                    clientY: touch.clientY,
+                    button: 0,
+                    buttons: type === "mouseup" ? 0 : 1,
+                }));
+            }
+
+            container.addEventListener("touchstart", (e) => {
+                if (e.touches.length !== 1) return;
+                if (tab.selectModeActive) {
+                    e.stopPropagation();
+                    fireMouse("mousedown", e.touches[0]);
+                    return;
+                }
+                // Cancel the default here so the browser never synthesises the
+                // compatibility mouse events (mousedown/up/click) that xterm
+                // uses to focus its input — those, not a touch listener, are
+                // what pops the keyboard on a scroll drag. stopPropagation alone
+                // can't stop them; only preventDefault on touchstart does. We
+                // re-focus ourselves on a genuine tap in touchend.
+                e.preventDefault();
+                e.stopPropagation();
+                dragScrolling = true;
+                dragMoved = false;
+                dragStartY = e.touches[0].clientY;
+                dragLastY = e.touches[0].clientY;
+            }, { capture: true, passive: false });
+
+            container.addEventListener("touchmove", (e) => {
+                if (e.touches.length !== 1) return;
+                if (tab.selectModeActive) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    fireMouse("mousemove", e.touches[0]);
+                    return;
+                }
+                if (!dragScrolling) return;
+                const y = e.touches[0].clientY;
+                // ignore tiny jitter so a still finger stays a tap
+                if (!dragMoved && Math.abs(y - dragStartY) < DRAG_THRESHOLD) return;
+                dragMoved = true;
+                e.preventDefault();
+                e.stopPropagation();
+                scrollByWheel(y - dragLastY, e.touches[0]);
+                dragLastY = y;
+            }, { capture: true, passive: false });
+
+            container.addEventListener("touchend", (e) => {
+                if (tab.selectModeActive) {
+                    e.stopPropagation();
+                    fireMouse("mouseup", e.changedTouches[0]);
+                    setTimeout(() => {
+                        const sel = tab.term.getSelection();
+                        if (sel && sel.trim()) {
+                            copyText(sel);
+                            showToast(`Disalin (${sel.length} karakter)`);
+                        }
+                    }, 30);
+                    return;
+                }
+                if (dragMoved) {
+                    // a scroll drag must not fire a tap that opens the keyboard
+                    e.preventDefault();
+                    e.stopPropagation();
+                } else {
+                    // a genuine tap → focus so the keyboard opens for typing
+                    tab.term.focus();
+                }
+                dragScrolling = false;
+                dragMoved = false;
+            }, { capture: true, passive: false });
+        }
+
+        function handleKeybarButton(btn) {
+            const tab = activeTab();
+            if (!tab) return;
+
+            if (btn.id === "btn-copy") {
+                copySelection(tab);
+            } else if (btn.id === "btn-paste") {
+                openPasteOverlay();
+            } else if (btn.dataset.key) {
+                sendRaw(tab, namedKeySequence(tab, btn.dataset.key));
+                if (tab.altActive) {
+                    tab.altActive = false;
+                    updateModifierUI();
+                }
+            } else if (btn.dataset.quick) {
+                sendRaw(tab, ctrlCode(btn.dataset.quick));
+            } else if (btn.dataset.toggle === "ctrl") {
+                tab.ctrlActive = !tab.ctrlActive;
+                updateModifierUI();
+                tab.term.focus();
+            } else if (btn.dataset.toggle === "shift") {
+                tab.shiftActive = !tab.shiftActive;
+                updateModifierUI();
+                tab.term.focus();
+            } else if (btn.dataset.toggle === "alt") {
+                tab.altActive = !tab.altActive;
+                updateModifierUI();
+                tab.term.focus();
+            } else if (btn.dataset.toggle === "select") {
+                tab.selectModeActive = !tab.selectModeActive;
+                tab.paneEl.style.touchAction = "none";
+                updateModifierUI();
+                if (!tab.selectModeActive) tab.term.focus();
+            }
+        }
+
+        document.querySelectorAll(".keybar button").forEach((btn) => {
+            // preventDefault on mousedown keeps focus (and the mobile keyboard)
+            // on the terminal instead of the toolbar button.
+            btn.addEventListener("mousedown", (e) => e.preventDefault());
+
+            // On touch, preventDefault on touchend both keeps focus AND
+            // suppresses the emulated "click" that would otherwise follow —
+            // so we run the action directly here instead of relying on click.
+            btn.addEventListener("touchend", (e) => {
+                e.preventDefault();
+                handleKeybarButton(btn);
+            }, { passive: false });
+
+            btn.addEventListener("click", () => handleKeybarButton(btn));
+        });
+
+        // ── Keybar minimize ──────────────────────────────────────────────────
+        // The virtual-key toolbar wraps to several rows on a phone and eats
+        // nearly half the screen. Let it be hidden with the ⌨ button in the top
+        // bar; the choice is remembered, and the terminal is refit so it takes
+        // over the freed space immediately.
+        const KEYBAR_COLLAPSE_KEY = "terminal-keybar-collapsed";
+        const btnKeysToggle = document.getElementById("btn-keys-toggle");
+
+        function refitActiveTab() {
+            const tab = activeTab();
+            if (!tab) return;
+            tab.fitAddon.fit();
+            if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
+                tab.ws.send(JSON.stringify({ type: "resize", cols: tab.term.cols, rows: tab.term.rows }));
+            }
+        }
+
+        function applyKeybarCollapsed(collapsed) {
+            document.body.classList.toggle("keys-collapsed", collapsed);
+            btnKeysToggle.classList.toggle("active", collapsed);
+        }
+
+        btnKeysToggle.addEventListener("click", () => {
+            const collapsed = !document.body.classList.contains("keys-collapsed");
+            try { localStorage.setItem(KEYBAR_COLLAPSE_KEY, collapsed ? "1" : "0"); } catch (e) { /* ignore */ }
+            applyKeybarCollapsed(collapsed);
+            // wait for the layout to settle before measuring the new terminal size
+            requestAnimationFrame(refitActiveTab);
+        });
+
+        applyKeybarCollapsed(localStorage.getItem(KEYBAR_COLLAPSE_KEY) === "1");
+
+        let resizeDebounce = null;
+        window.addEventListener("resize", () => {
+            clearTimeout(resizeDebounce);
+            resizeDebounce = setTimeout(() => {
+                const tab = activeTab();
+                if (!tab) return;
+                tab.fitAddon.fit();
+                if (tab.ws && tab.ws.readyState === WebSocket.OPEN) {
+                    tab.ws.send(JSON.stringify({ type: "resize", cols: tab.term.cols, rows: tab.term.rows }));
+                }
+            }, 200);
+        });
+
+        if (!deviceId) {
+            setStatus("error", "disconnected");
+            const paneEl = document.createElement("div");
+            paneEl.className = "term-pane active";
+            paneEl.style.color = "#ef4444";
+            paneEl.style.padding = "1rem";
+            paneEl.textContent = "No device specified.";
+            document.getElementById("terminals-container").appendChild(paneEl);
+        } else {
+            const saved = loadSavedSessionIds();
+            if (saved.length > 0) {
+                saved.forEach((sid) => createTab(sid));
+                switchTab(tabs[0].id); // show "Tab 1" first, not whichever was restored last
+            } else {
+                createTab();
+            }
+        }
+    </script>
+</body>
+
+</html>
