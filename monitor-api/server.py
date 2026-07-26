@@ -631,8 +631,23 @@ SSH_BUFFER_MAX = 200_000  # chars of scrollback kept for replay on reattach
 # fix, the Services tab, a reboot) kills every long-running job on every
 # device. Wrapping the shell in tmux moves its lifetime onto the target
 # machine instead: we attach on connect and detach on disconnect, so the API
-# becomes disposable. Targets without tmux (Windows) just get a plain shell.
-TMUX_SUPPORT: dict[str, bool] = {}  # device_id → tmux available, probed once
+# becomes disposable.
+#
+# Windows has no tmux, but it does have a shell worth asking for by name:
+# OpenSSH there hands out cmd.exe unless HKLM\SOFTWARE\OpenSSH\DefaultShell
+# says otherwise, which means no PowerShell — no `irm`, no `iex`. Launching
+# powershell.exe ourselves gets that without touching the target's registry,
+# and leaves scp/sftp on those boxes alone (setting DefaultShell is known to
+# break scp, since PowerShell writes a banner into the transfer stream).
+#
+# Anything we can't identify falls back to whatever the account's default
+# shell is, exactly as before.
+SHELL_KIND: dict[str, str] = {}  # device_id → "tmux" | "powershell" | "plain"
+
+
+def _tmux_capable(device_id: str, unknown: bool = False) -> bool:
+    kind = SHELL_KIND.get(device_id)
+    return unknown if kind is None else kind == "tmux"
 
 # The tmux session list on the target is the authoritative record of which
 # terminals exist for a device — it outlives this process and every browser,
@@ -659,24 +674,39 @@ def _session_id_from_tmux(name: str) -> str | None:
     return sid if _SESSION_ID_RE.match(sid) else None
 
 
+def _probe_shell_kind(client: paramiko.SSHClient) -> str:
+    """Best shell we can get on this target. Probed once per device.
+
+    `where` is a cmd.exe builtin and not a Linux command, so a Linux box that
+    has no tmux still falls through to "plain" rather than misidentifying.
+    """
+    try:
+        if _ssh_exit_status(client, "command -v tmux") == 0:
+            return "tmux"
+        if _ssh_exit_status(client, "where powershell") == 0:
+            return "powershell"
+    except Exception:
+        pass
+    return "plain"
+
+
 def _open_shell(device: dict, device_id: str, session_id: str):
     """Connect and open an interactive shell. Returns (client, channel)."""
     client = _ssh_connect(device)
-    if device_id not in TMUX_SUPPORT:
-        try:
-            TMUX_SUPPORT[device_id] = _ssh_exit_status(client, "command -v tmux") == 0
-        except Exception:
-            TMUX_SUPPORT[device_id] = False
+    if device_id not in SHELL_KIND:
+        SHELL_KIND[device_id] = _probe_shell_kind(client)
 
     channel = client.get_transport().open_session()
     channel.get_pty(term="xterm-256color")
-    if TMUX_SUPPORT[device_id]:
+    kind = SHELL_KIND[device_id]
+    if kind == "tmux":
         # -A attaches to the session if it already exists and creates it
         # otherwise, which is exactly the reconnect semantics we want: same
-        # session_id (persisted in the browser's localStorage) → same shell,
-        # whether we're reconnecting after a network blip or after the API
-        # process was restarted out from under it.
+        # session_id → same shell, whether we're reconnecting after a network
+        # blip or after the API process was restarted out from under it.
         channel.exec_command(f"tmux new-session -A -s {_tmux_session_name(session_id)}")
+    elif kind == "powershell":
+        channel.exec_command("powershell.exe -NoLogo")
     else:
         channel.invoke_shell()
     return client, channel
@@ -842,7 +872,7 @@ def _collect_sessions(device: dict, device_id: str) -> list[dict]:
     """
     found: dict[str, dict] = {}
 
-    if TMUX_SUPPORT.get(device_id, True):
+    if _tmux_capable(device_id, unknown=True):
         client = _live_client(device_id)
         own_client = client is None
         try:
@@ -851,7 +881,7 @@ def _collect_sessions(device: dict, device_id: str) -> list[dict]:
             rc, out = _ssh_run(client, _TMUX_LIST_CMD)
             # rc != 0 is the normal "no server running" case, not an error.
             if rc == 0:
-                TMUX_SUPPORT[device_id] = True
+                SHELL_KIND[device_id] = "tmux"
                 for line in out.splitlines():
                     parts = line.strip().split("\t")
                     if len(parts) != 3:
@@ -886,7 +916,7 @@ async def list_ssh_sessions(device_id: str):
     if not device:
         raise HTTPException(404, "device not found")
     sessions = await asyncio.to_thread(_collect_sessions, device, device_id)
-    return {"persistent": bool(TMUX_SUPPORT.get(device_id)), "sessions": sessions}
+    return {"persistent": _tmux_capable(device_id), "sessions": sessions}
 
 
 @app.delete("/api/devices/{device_id}/sessions/{session_id}")
@@ -910,7 +940,7 @@ async def kill_ssh_session(device_id: str, session_id: str):
     # Unknown support (nothing connected since the last restart) still gets an
     # attempt — the probe result is cached, so a non-tmux device only pays for
     # the extra connection once.
-    if TMUX_SUPPORT.get(device_id, True):
+    if _tmux_capable(device_id, unknown=True):
         try:
             await asyncio.to_thread(
                 _tmux_kill, device, session_id, session.client if session else None)
