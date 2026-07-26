@@ -76,11 +76,13 @@ MANAGED_SERVICES = {
     "poka-watch": {"unit": "poka-watch.service", "label": "Poka Watch (build)", "icon": "👀"},
     "reminder-bot-backend": {"unit": "reminder-bot-backend.service", "label": "Reminder Bot Backend", "icon": "⏰"},
     "reminder-bot-frontend": {"unit": "reminder-bot-frontend.service", "label": "Reminder Bot Frontend", "icon": "🗓️"},
+    "prd-project": {"unit": "prd-project.service", "label": "PRD Project", "icon": "⚡"},
 }
 
 SYSTEMCTL_BIN = shutil.which("systemctl") or "/usr/bin/systemctl"
 JOURNALCTL_BIN = shutil.which("journalctl") or "/usr/bin/journalctl"
 SUDO_BIN = shutil.which("sudo") or "/usr/bin/sudo"
+ADB_BIN = shutil.which("adb") or os.getenv("ADB_BIN", "adb")
 
 
 async def _run_cmd(*args: str, timeout: float = 10.0) -> tuple[int, str, str]:
@@ -90,7 +92,12 @@ async def _run_cmd(*args: str, timeout: float = 10.0) -> tuple[int, str, str]:
     try:
         out, err = await asyncio.wait_for(proc.communicate(), timeout=timeout)
     except asyncio.TimeoutError:
-        proc.kill()
+        # The process may already be gone (e.g. an adb client that exited while
+        # its forked daemon kept the pipe open), so kill() can race.
+        try:
+            proc.kill()
+        except ProcessLookupError:
+            pass
         await proc.wait()
         return -1, "", "timeout"
     return proc.returncode, out.decode(errors="replace"), err.decode(errors="replace")
@@ -432,6 +439,8 @@ async def _check_device_up(device: dict):
     host = (device.get("host") or "").strip()
     if not host:
         return None
+    if device.get("protocol") == "android":
+        return await _tcp_probe(host, device.get("port", 5555))
     has_ssh = "auth" in device and "username" in device
     if has_ssh:
         return await _tcp_probe(host, device.get("port", 22))
@@ -450,12 +459,12 @@ async def get_devices_status():
 
 class DeviceCreate(BaseModel):
     label: str
-    icon: str = "🖥️"
+    icon: str = ""  # per-protocol fallback applied below (📱 for android)
     host: str = ""
     port: int = 22
     username: str = ""
     os: str = "linux"
-    protocol: str = "ssh"  # "ssh" | "wol"
+    protocol: str = "ssh"  # "ssh" | "wol" | "android"
     auth_type: str = "password"  # "password" | "key"
     password: str | None = None
     key_path: str | None = None
@@ -481,8 +490,8 @@ def _build_ssh_auth(auth_type: str, password: str | None, key_path: str | None,
 
 @app.post("/api/devices")
 async def add_device(payload: DeviceCreate):
-    if payload.protocol not in ("ssh", "wol"):
-        raise HTTPException(400, "protocol must be 'ssh' or 'wol'")
+    if payload.protocol not in ("ssh", "wol", "android"):
+        raise HTTPException(400, "protocol must be 'ssh', 'wol', or 'android'")
 
     base_id = _slugify(payload.label)
     device_id = base_id
@@ -510,6 +519,17 @@ async def add_device(payload: DeviceCreate):
             device["auth"] = _build_ssh_auth(
                 payload.auth_type, payload.password, payload.key_path, payload.passphrase
             )
+
+    elif payload.protocol == "android":
+        device = {
+            "id": device_id,
+            "label": payload.label,
+            "icon": payload.icon or "📱",
+            "host": payload.host,
+            "port": payload.port,  # ADB port, typically 5555
+            "os": "android",
+            "protocol": "android",
+        }
     else:
         auth = _build_ssh_auth(payload.auth_type, payload.password, payload.key_path, payload.passphrase)
         device = {
@@ -546,6 +566,26 @@ async def delete_device(device_id: str):
     return {"ok": True}
 
 
+def _ssh_exit_status(client: paramiko.SSHClient, command: str, timeout: float = 8.0) -> int:
+    """Run a short command and return its exit code, or -1 on timeout.
+
+    recv_exit_status() waits on the channel with no deadline of its own and is
+    documented to hang if nothing drains stdout, so this polls and reads
+    instead — probing a device must never wedge the connect path.
+    """
+    _, stdout, _ = client.exec_command(command, timeout=timeout)
+    chan = stdout.channel
+    deadline = time.monotonic() + timeout
+    while not chan.exit_status_ready():
+        if time.monotonic() > deadline:
+            chan.close()
+            return -1
+        if chan.recv_ready():
+            chan.recv(4096)
+        time.sleep(0.05)
+    return chan.recv_exit_status()
+
+
 def _ssh_connect(device: dict) -> paramiko.SSHClient:
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
@@ -574,6 +614,55 @@ def _ssh_connect(device: dict) -> paramiko.SSHClient:
 # the same device re-attaches to the same shell and replays the scrollback.
 SSH_IDLE_TIMEOUT = 6 * 3600  # 6 hours with no client attached
 SSH_BUFFER_MAX = 200_000  # chars of scrollback kept for replay on reattach
+
+# ...but that only covers the *client* going away. Anything running in the
+# shell still dies with this process, so restarting monitor-api (deploying a
+# fix, the Services tab, a reboot) kills every long-running job on every
+# device. Wrapping the shell in tmux moves its lifetime onto the target
+# machine instead: we attach on connect and detach on disconnect, so the API
+# becomes disposable. Targets without tmux (Windows) just get a plain shell.
+TMUX_SUPPORT: dict[str, bool] = {}  # device_id → tmux available, probed once
+_TMUX_NAME_RE = re.compile(r"[^A-Za-z0-9_-]")
+
+
+def _tmux_session_name(session_id: str) -> str:
+    """tmux session names can't contain '.' or ':', and this ends up in a
+    shell command — so keep it to a conservative charset."""
+    return "mh-" + _TMUX_NAME_RE.sub("", session_id)[:32]
+
+
+def _open_shell(device: dict, device_id: str, session_id: str):
+    """Connect and open an interactive shell. Returns (client, channel)."""
+    client = _ssh_connect(device)
+    if device_id not in TMUX_SUPPORT:
+        try:
+            TMUX_SUPPORT[device_id] = _ssh_exit_status(client, "command -v tmux") == 0
+        except Exception:
+            TMUX_SUPPORT[device_id] = False
+
+    channel = client.get_transport().open_session()
+    channel.get_pty(term="xterm-256color")
+    if TMUX_SUPPORT[device_id]:
+        # -A attaches to the session if it already exists and creates it
+        # otherwise, which is exactly the reconnect semantics we want: same
+        # session_id (persisted in the browser's localStorage) → same shell,
+        # whether we're reconnecting after a network blip or after the API
+        # process was restarted out from under it.
+        channel.exec_command(f"tmux new-session -A -s {_tmux_session_name(session_id)}")
+    else:
+        channel.invoke_shell()
+    return client, channel
+
+
+def _tmux_kill(device: dict, session_id: str, client: paramiko.SSHClient | None = None):
+    own_client = client is None
+    if own_client:
+        client = _ssh_connect(device)
+    try:
+        _ssh_exit_status(client, f"tmux kill-session -t {_tmux_session_name(session_id)}")
+    finally:
+        if own_client:
+            client.close()
 
 
 class SSHSession:
@@ -648,10 +737,8 @@ async def ssh_terminal(websocket: WebSocket, device_id: str, session_id: str):
 
     if session is None or session.channel.closed:
         try:
-            client = await asyncio.to_thread(_ssh_connect, device)
-            channel = client.get_transport().open_session()
-            channel.get_pty(term="xterm-256color")
-            channel.invoke_shell()
+            client, channel = await asyncio.to_thread(
+                _open_shell, device, device_id, session_id)
         except Exception as e:
             await websocket.send_text(f"\r\n\x1b[31mConnection failed: {e}\x1b[0m\r\n")
             await websocket.close(code=4500)
@@ -695,6 +782,37 @@ async def ssh_terminal(websocket: WebSocket, device_id: str, session_id: str):
                         sess.close()
 
             session.idle_handle = loop.call_later(SSH_IDLE_TIMEOUT, _teardown)
+
+
+@app.delete("/api/devices/{device_id}/sessions/{session_id}")
+async def kill_ssh_session(device_id: str, session_id: str):
+    """Explicitly end a terminal session (the tab's ✕ button).
+
+    Detaching is the default now, so without this every closed tab would leave
+    a detached tmux session running on the target forever."""
+    device = DEVICES.get(device_id)
+    if not device:
+        raise HTTPException(404, "device not found")
+
+    key = (device_id, session_id)
+    with SSH_SESSIONS_LOCK:
+        session = SSH_SESSIONS.pop(key, None)
+    if session and session.idle_handle:
+        session.idle_handle.cancel()
+
+    # Unknown support (nothing connected since the last restart) still gets an
+    # attempt — the probe result is cached, so a non-tmux device only pays for
+    # the extra connection once.
+    if TMUX_SUPPORT.get(device_id, True):
+        try:
+            await asyncio.to_thread(
+                _tmux_kill, device, session_id, session.client if session else None)
+        except Exception as e:
+            print(f"⚠️  tmux kill-session failed for {device_id}/{session_id}: {e}")
+
+    if session:
+        session.close()
+    return {"ok": True}
 
 
 # ── Wake on LAN ──────────────────────────────────────────────────────────────
@@ -766,6 +884,243 @@ async def power_action(device_id: str, action: str):
     except Exception as e:
         raise HTTPException(500, f"Gagal kirim perintah: {e}")
     return {"ok": True}
+
+
+
+# ── Android remote (scrcpy-like via ADB) ────────────────────────────────────
+import base64 as _b64
+import struct as _struct
+
+ANDROID_SESSIONS: dict[str, asyncio.subprocess.Process] = {}
+
+
+async def _adb_cmd(host: str, port: int, *args: str, timeout: float = 10.0):
+    serial = f"{host}:{port}"
+    return await _run_cmd(ADB_BIN, "-s", serial, *args, timeout=timeout)
+
+
+async def _adb_start_server():
+    """Boot the adb daemon once, detached from our pipes.
+
+    The daemon inherits stdout/stderr from whichever adb client spawns it, so
+    if the first command we run is a plain `adb connect` its pipes never close
+    and _run_cmd times out even though the client already finished.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            ADB_BIN, "start-server",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=20)
+    except Exception:
+        pass
+
+
+async def _ensure_adb_connected(host: str, port: int) -> bool:
+    serial = f"{host}:{port}"
+    await _adb_start_server()
+    # `adb connect` exits 0 even when the target refuses, so the only reliable
+    # signal is the message itself ("connected to" / "already connected to").
+    rc, out, err = await _run_cmd(ADB_BIN, "connect", serial, timeout=15)
+    if rc != 0:
+        return False
+    return "connected to" in (out + err).lower()
+
+
+async def _adb_wake(host: str, port: int, timeout: float = 6.0) -> bool:
+    """Wake the display and wait until it actually reports ON.
+
+    screenrecord aborts with INVALID_LAYER_STACK if the display is off, and the
+    panel needs a moment after the wake keyevent before it is really on, so
+    polling beats a fixed sleep here.
+    """
+    await _adb_cmd(host, port, "shell", "input", "keyevent", "224", timeout=5)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        rc, out, _ = await _adb_cmd(host, port, "shell", "dumpsys", "display", timeout=5)
+        if rc == 0 and "mScreenState=ON" in out:
+            return True
+        await asyncio.sleep(0.4)
+    return False
+
+
+async def _adb_screenrecord(host: str, port: int, size: str, bitrate: str):
+    """Start screenrecord piping a raw H.264 Annex-B stream to stdout."""
+    serial = f"{host}:{port}"
+    return await asyncio.create_subprocess_exec(
+        ADB_BIN, "-s", serial, "exec-out",
+        "screenrecord", "--output-format=h264", "--time-limit", "0",
+        "--bit-rate", bitrate, "--size", size, "-",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+
+
+async def _adb_screencap_jpeg(host: str, port: int, quality: int = 70) -> bytes | None:
+    serial = f"{host}:{port}"
+    proc = await asyncio.create_subprocess_exec(
+        ADB_BIN, "-s", serial, "exec-out",
+        "screencap", "-p",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=8)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return None
+    if not out or len(out) < 100:
+        return None
+    return out
+
+
+async def _adb_get_screen_size(host: str, port: int) -> tuple[int, int]:
+    rc, out, _ = await _adb_cmd(host, port, "shell", "wm", "size")
+    if rc == 0:
+        m = re.search(r"(\d+)x(\d+)", out)
+        if m:
+            return int(m.group(1)), int(m.group(2))
+    return 1080, 1920
+
+
+@app.websocket("/ws/android/{device_id}")
+async def android_remote(websocket: WebSocket, device_id: str):
+    await websocket.accept()
+
+    device = DEVICES.get(device_id)
+    if not device or device.get("protocol") != "android":
+        await websocket.close(code=4404)
+        return
+
+    host = device["host"]
+    port = device.get("port", 5555)
+
+    connected = await _ensure_adb_connected(host, port)
+    if not connected:
+        await websocket.send_json({"type": "error", "msg": f"Gagal connect ADB ke {host}:{port}"})
+        await websocket.close(code=4500)
+        return
+
+    params = websocket.query_params
+    mode = params.get("mode", "h264")
+    size = params.get("size", "720x1560")
+    bitrate = params.get("bitrate", "8M")
+    if not re.fullmatch(r"\d{3,5}x\d{3,5}", size):
+        size = "720x1560"
+    if not re.fullmatch(r"\d{1,3}M|\d{4,9}", bitrate):
+        bitrate = "8M"
+
+    width, height = await _adb_get_screen_size(host, port)
+    await websocket.send_json({
+        "type": "info", "width": width, "height": height, "mode": mode,
+    })
+
+    streaming = True
+
+    async def stream_png():
+        """Fallback: poll screencap. ~2 fps, but needs no WebCodecs support."""
+        nonlocal streaming
+        while streaming:
+            png_data = await _adb_screencap_jpeg(host, port)
+            if png_data and streaming:
+                try:
+                    await websocket.send_bytes(png_data)
+                except Exception:
+                    break
+            await asyncio.sleep(0.12)
+
+    async def stream_h264():
+        """Stream the device's hardware H.264 encoder straight to the browser.
+
+        screenrecord dies whenever the display turns off, so each pass wakes the
+        screen first and the loop simply starts a new one — the client resets its
+        decoder on the stream_restart notice because a fresh process emits new
+        SPS/PPS and an IDR.
+        """
+        nonlocal streaming
+        first_pass = True
+        while streaming:
+            if not await _adb_wake(host, port):
+                await websocket.send_json(
+                    {"type": "error", "msg": "Layar HP tidak bisa dinyalakan"})
+                return
+            if not first_pass:
+                await websocket.send_json({"type": "stream_restart"})
+            first_pass = False
+
+            proc = await _adb_screenrecord(host, port, size, bitrate)
+            try:
+                # screenrecord reports failures as plain text on *stdout*, so the
+                # first chunk has to be inspected rather than trusting exit codes.
+                head = await proc.stdout.read(65536)
+                if not head:
+                    continue
+                if head.startswith(b"ERROR"):
+                    await websocket.send_json({
+                        "type": "error",
+                        "msg": head.decode(errors="replace").strip()[:200],
+                    })
+                    return
+                await websocket.send_bytes(head)
+                while streaming:
+                    chunk = await proc.stdout.read(65536)
+                    if not chunk:
+                        break
+                    await websocket.send_bytes(chunk)
+            except Exception:
+                return
+            finally:
+                if proc.returncode is None:
+                    try:
+                        proc.kill()
+                    except ProcessLookupError:
+                        pass
+                await proc.wait()
+
+    stream_task = asyncio.create_task(
+        stream_h264() if mode == "h264" else stream_png())
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            msg = json.loads(raw)
+            t = msg.get("type")
+            if t == "tap":
+                x, y = int(msg["x"]), int(msg["y"])
+                await _adb_cmd(host, port, "shell", "input", "tap", str(x), str(y), timeout=5)
+            elif t == "swipe":
+                x1, y1, x2, y2 = int(msg["x1"]), int(msg["y1"]), int(msg["x2"]), int(msg["y2"])
+                dur = int(msg.get("duration", 300))
+                await _adb_cmd(host, port, "shell", "input", "swipe",
+                               str(x1), str(y1), str(x2), str(y2), str(dur), timeout=5)
+            elif t == "keyevent":
+                key = int(msg["code"])
+                await _adb_cmd(host, port, "shell", "input", "keyevent", str(key), timeout=5)
+            elif t == "text":
+                text = msg.get("text", "")
+                if text:
+                    await _adb_cmd(host, port, "shell", "input", "text",
+                                   text.replace(" ", "%s"), timeout=5)
+            elif t == "longpress":
+                x, y = int(msg["x"]), int(msg["y"])
+                await _adb_cmd(host, port, "shell", "input", "swipe",
+                               str(x), str(y), str(x), str(y), "600", timeout=5)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        streaming = False
+        stream_task.cancel()
+
+
+@app.get("/android.html")
+async def serve_android():
+    page = FRONTEND_DIR / "android.html"
+    if page.exists():
+        return FileResponse(page, headers={"Cache-Control": "no-store"})
+    return Response(status_code=404)
 
 
 # ── Managed services: status / logs / start-stop-restart ───────────────────
@@ -911,6 +1266,7 @@ async def _collect_metrics():
 @app.on_event("startup")
 async def startup():
     asyncio.create_task(_collect_metrics())
+    asyncio.create_task(_adb_start_server())
 
 
 # ── Main ────────────────────────────────────────────────────────────────────

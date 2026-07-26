@@ -12,6 +12,11 @@
     let currentTab = "system";
     let procSort = "cpu"; // top-processes sort: "cpu" | "ram"
 
+    // DOM caches for keyed diff (avoid full innerHTML rebuild every 5s)
+    const deviceCardMap = new Map();   // id → element
+    const serviceCardMap = new Map();  // id → element
+    const procRowMap = new Map();      // top_pid → element
+
 
     // ── DOM refs ────────────────────────────────────────────────
     const $ = (s) => document.querySelector(s);
@@ -70,9 +75,30 @@
         const circumference = 326.73;
         const offset = circumference * (1 - Math.min(percent, 100) / 100);
         el.style.strokeDashoffset = offset;
-        // Color change based on value
+        // Color change based on value — always reassigned, otherwise a ring
+        // that spiked once stays red/yellow forever.
         if (percent > 90) el.style.stroke = "var(--red)";
         else if (percent > 70) el.style.stroke = "var(--yellow)";
+        else el.style.stroke = "";
+    }
+
+    // The grids/lists ship a <div class="skeleton-card"> placeholder in the
+    // HTML, and the error branches below replace the container's contents. The
+    // keyed renderers only ever append their own nodes, so anything else in the
+    // container has to be dropped explicitly — otherwise the placeholder sticks
+    // around as an empty shimmering box next to the real cards. This also puts
+    // the nodes back in list order (only moving the ones actually out of
+    // place), which is what keeps Top Processes sorted after the first paint.
+    function syncChildren(container, els) {
+        const wanted = new Set(els);
+        for (const child of Array.from(container.children)) {
+            if (!wanted.has(child)) child.remove();
+        }
+        els.forEach((el, i) => {
+            if (container.children[i] !== el) {
+                container.insertBefore(el, container.children[i] || null);
+            }
+        });
     }
 
     startRefresh();
@@ -104,58 +130,127 @@
         const count = $("#device-count");
         if (!list) {
             grid.innerHTML = '<div class="bot-card"><p style="color:var(--text-muted)">Gagal load device list</p></div>';
+            deviceCardMap.clear();
             if (count) count.textContent = "—";
             return;
         }
         if (count) count.textContent = `${list.length} device`;
         if (list.length === 0) {
             grid.innerHTML = '<div class="bot-card"><p style="color:var(--text-muted)">Belum ada device. Klik + Add buat nambah.</p></div>';
+            deviceCardMap.clear();
             return;
         }
-        grid.innerHTML = "";
+
+        const currentIds = new Set(list.map((d) => d.id));
+        // Remove stale cards
+        for (const [id, cached] of deviceCardMap) {
+            if (!currentIds.has(id)) {
+                cached.el.remove();
+                deviceCardMap.delete(id);
+            }
+        }
+
         list.forEach((d, i) => {
-            const card = document.createElement("div");
-            // online: true -> green bar, false -> red bar, unknown -> no bar
-            // (e.g. WOL-only device with no SSH creds and no ping binary).
-            const statusClass = d.online === true ? "active" : d.online === false ? "inactive" : "";
-            card.className = `bot-card ${statusClass}`;
-            card.style.animationDelay = `${i * 0.08}s`;
-            const isWol = d.protocol === "wol";
-            card.innerHTML = `
-                <div class="bot-card-top">
-                    <div class="bot-info">
-                        <div class="bot-icon">${escapeHtml(d.icon || "🖥️")}</div>
-                        <div>
-                            <div class="bot-name">${escapeHtml(d.label)}</div>
-                            <div class="bot-type">${escapeHtml(d.host)} · ${escapeHtml(d.os)} · ${isWol ? "Wake on LAN" : "SSH"}${d.online === true ? " · 🟢 Online" : d.online === false ? " · 🔴 Offline" : ""}</div>
-                        </div>
+            const cached = deviceCardMap.get(d.id);
+            if (cached) {
+                const prev = cached.data;
+                // Update only fields that changed
+                const changed =
+                    prev.label !== d.label ||
+                    prev.icon !== d.icon ||
+                    prev.online !== d.online ||
+                    prev.protocol !== d.protocol ||
+                    prev.host !== d.host ||
+                    prev.os !== d.os ||
+                    prev.ssh_power !== d.ssh_power;
+                if (changed) {
+                    cached.el.className = `bot-card ${deviceStatusClass(d)}`;
+                    cached.el.querySelector(".bot-name").textContent = d.label;
+                    cached.el.querySelector(".bot-type").textContent = deviceMeta(d);
+                    cached.el.querySelector(".bot-icon").textContent = d.icon || "🖥️";
+                    // Rebuild actions (they depend on protocol/online state)
+                    cached.el.querySelector(".bot-actions").innerHTML = deviceActionsHtml(d);
+                    bindDeviceActions(cached.el, d);
+                    cached.data = d;
+                }
+            } else {
+                const el = createDeviceCard(d, i);
+                deviceCardMap.set(d.id, { data: d, el });
+                grid.appendChild(el);
+            }
+        });
+
+        syncChildren(grid, list.map((d) => deviceCardMap.get(d.id).el));
+    }
+
+    function deviceStatusClass(d) {
+        return d.online === true ? "active" : d.online === false ? "inactive" : "";
+    }
+
+    // Built from the parts we actually have — a device saved without an OS
+    // would otherwise render as "192.168.1.5 ·  · SSH".
+    function deviceMeta(d) {
+        const kind = d.protocol === "wol" ? "Wake on LAN"
+            : d.protocol === "android" ? "Android ADB"
+                : "SSH";
+        const parts = [d.host, d.os, kind].filter(Boolean);
+        if (d.online === true) parts.push("🟢 Online");
+        else if (d.online === false) parts.push("🔴 Offline");
+        return parts.join(" · ");
+    }
+
+    function deviceActionsHtml(d) {
+        const isWol = d.protocol === "wol";
+        const id = escapeHtml(d.id);
+        const label = escapeHtml(d.label);
+        const primary = isWol
+            ? `<button class="btn-action start" data-wake="${id}" data-label="${label}">⚡ Wake Up</button>`
+            : d.protocol === "android"
+                ? `<button class="btn-action start" data-android="${id}" data-label="${label}">📱 Remote</button>`
+                : `<button class="btn-action start" data-connect="${id}" data-label="${label}">▶ Connect</button>`;
+        const power = isWol && d.ssh_power
+            ? `<button class="btn-action" data-power="restart" data-device="${id}" data-label="${label}" title="Restart">🔁 Restart</button>
+               <button class="btn-action" data-power="shutdown" data-device="${id}" data-label="${label}" title="Shutdown">⏻ Shutdown</button>`
+            : "";
+        return `${primary}${power}<button class="btn-action delete" data-delete="${id}" data-label="${label}" title="Hapus device">✕</button>`;
+    }
+
+    function createDeviceCard(d, i) {
+        const card = document.createElement("div");
+        card.className = `bot-card ${deviceStatusClass(d)}`;
+        card.style.animationDelay = `${i * 0.08}s`;
+        card.setAttribute("data-id", d.id);
+        card.innerHTML = `
+            <div class="bot-card-top">
+                <div class="bot-info">
+                    <div class="bot-icon">${escapeHtml(d.icon || "🖥️")}</div>
+                    <div>
+                        <div class="bot-name">${escapeHtml(d.label)}</div>
+                        <div class="bot-type">${escapeHtml(deviceMeta(d))}</div>
                     </div>
                 </div>
-                <div class="bot-actions">
-                    ${isWol
-                        ? `<button class="btn-action start" data-wake="${escapeHtml(d.id)}" data-label="${escapeHtml(d.label)}">⚡ Wake Up</button>`
-                        : `<button class="btn-action start" data-connect="${escapeHtml(d.id)}" data-label="${escapeHtml(d.label)}">▶ Connect</button>`}
-                    ${isWol && d.ssh_power
-                        ? `<button class="btn-action" data-power="restart" data-device="${escapeHtml(d.id)}" data-label="${escapeHtml(d.label)}" title="Restart">🔁 Restart</button>
-                           <button class="btn-action" data-power="shutdown" data-device="${escapeHtml(d.id)}" data-label="${escapeHtml(d.label)}" title="Shutdown">⏻ Shutdown</button>`
-                        : ""}
-                    <button class="btn-action delete" data-delete="${escapeHtml(d.id)}" data-label="${escapeHtml(d.label)}" title="Hapus device">✕</button>
-                </div>
-            `;
-            grid.appendChild(card);
-        });
-        $$("[data-connect]").forEach((btn) => {
+            </div>
+            <div class="bot-actions">${deviceActionsHtml(d)}</div>
+        `;
+        bindDeviceActions(card, d);
+        return card;
+    }
+
+    function bindDeviceActions(card, d) {
+        const isWol = d.protocol === "wol";
+        card.querySelectorAll("[data-android]").forEach((btn) => {
             btn.addEventListener("click", () => {
-                const url = `terminal.html?id=${encodeURIComponent(btn.dataset.connect)}&label=${encodeURIComponent(btn.dataset.label)}`;
-                // noopener: without it, the new tab keeps a live window.opener
-                // link back here, which forces Chrome to run both tabs in the
-                // SAME renderer process (same site). The terminal tab's heavy
-                // rendering can then hog that shared process's main thread
-                // and freeze clicks on this dashboard tab too.
+                const url = `android.html?id=${encodeURIComponent(btn.dataset.android)}&label=${encodeURIComponent(btn.dataset.label)}`;
                 window.open(url, "_blank", "noopener");
             });
         });
-        $$("[data-wake]").forEach((btn) => {
+        card.querySelectorAll("[data-connect]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const url = `terminal.html?id=${encodeURIComponent(btn.dataset.connect)}&label=${encodeURIComponent(btn.dataset.label)}`;
+                window.open(url, "_blank", "noopener");
+            });
+        });
+        card.querySelectorAll("[data-wake]").forEach((btn) => {
             btn.addEventListener("click", async () => {
                 btn.disabled = true;
                 const original = btn.textContent;
@@ -178,7 +273,7 @@
                 }
             });
         });
-        $$("[data-power]").forEach((btn) => {
+        card.querySelectorAll("[data-power]").forEach((btn) => {
             btn.addEventListener("click", async () => {
                 const action = btn.dataset.power;
                 const verb = action === "restart" ? "restart" : "matiin";
@@ -204,7 +299,7 @@
                 }
             });
         });
-        $$("[data-delete]").forEach((btn) => {
+        card.querySelectorAll("[data-delete]").forEach((btn) => {
             btn.addEventListener("click", async () => {
                 if (!confirm(`Hapus device "${btn.dataset.label}"?`)) return;
                 const res = await fetch(`${API_BASE}/api/devices/${encodeURIComponent(btn.dataset.delete)}`, {
@@ -239,43 +334,91 @@
         const grid = $("#service-grid");
         const count = $("#service-count");
         if (!Array.isArray(list)) {
-            // Non-array = API error (e.g. old server without /api/services, or a
-            // {detail: ...} error body). Guard against reading .length off it.
             grid.innerHTML = '<div class="bot-card"><p style="color:var(--text-muted)">Gagal load service list — coba restart monitor-api.</p></div>';
+            serviceCardMap.clear();
             if (count) count.textContent = "—";
             return;
         }
         if (count) count.textContent = `${list.length} service`;
-        grid.innerHTML = "";
+
+        const currentIds = new Set(list.map((s) => s.id));
+        for (const [id, cached] of serviceCardMap) {
+            if (!currentIds.has(id)) {
+                cached.el.remove();
+                serviceCardMap.delete(id);
+            }
+        }
+
         list.forEach((s, i) => {
-            const card = document.createElement("div");
-            const cls = svcStatusClass(s.active_state);
-            card.className = `bot-card ${cls === "running" ? "active" : cls === "failed" ? "failed" : "inactive"}`;
-            card.style.animationDelay = `${i * 0.08}s`;
-            const isRunning = s.active_state === "active";
-            card.innerHTML = `
-                <div class="bot-card-top">
-                    <div class="bot-info">
-                        <div class="bot-icon">${escapeHtml(s.icon || "⚙️")}</div>
-                        <div>
-                            <div class="bot-name">${escapeHtml(s.label)}</div>
-                            <div class="bot-type">${escapeHtml(s.unit)}</div>
-                        </div>
-                    </div>
-                    <span class="svc-status ${cls}">${escapeHtml(SERVICE_STATE_LABEL[s.active_state] || s.active_state)}</span>
-                </div>
-                <div class="bot-actions">
-                    ${isRunning
-                        ? `<button class="btn-action stop" data-svc-action="stop" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">⏹ Stop</button>`
-                        : `<button class="btn-action start" data-svc-action="start" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">▶ Start</button>`}
-                    <button class="btn-action restart" data-svc-action="restart" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">🔁 Restart</button>
-                    <button class="btn-action logs" data-svc-logs="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">📜 Logs</button>
-                </div>
-            `;
-            grid.appendChild(card);
+            const cached = serviceCardMap.get(s.id);
+            if (cached) {
+                const prev = cached.data;
+                const changed =
+                    prev.active_state !== s.active_state ||
+                    prev.label !== s.label ||
+                    prev.unit !== s.unit ||
+                    prev.icon !== s.icon;
+                if (changed) {
+                    const cls = svcStatusClass(s.active_state);
+                    cached.el.className = `bot-card ${cls === "running" ? "active" : cls === "failed" ? "failed" : "inactive"}`;
+                    cached.el.querySelector(".bot-name").textContent = s.label;
+                    cached.el.querySelector(".bot-type").textContent = s.unit;
+                    cached.el.querySelector(".svc-status").className = `svc-status ${cls}`;
+                    cached.el.querySelector(".svc-status").textContent =
+                        SERVICE_STATE_LABEL[s.active_state] || s.active_state;
+                    const isRunning = s.active_state === "active";
+                    cached.el.querySelector(".bot-actions").innerHTML = `
+                        ${isRunning
+                            ? `<button class="btn-action stop" data-svc-action="stop" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">⏹ Stop</button>`
+                            : `<button class="btn-action start" data-svc-action="start" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">▶ Start</button>`}
+                        <button class="btn-action restart" data-svc-action="restart" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">🔁 Restart</button>
+                        <button class="btn-action logs" data-svc-logs="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">📜 Logs</button>
+                    `;
+                    bindServiceActions(cached.el);
+                    cached.data = s;
+                }
+            } else {
+                const el = createServiceCard(s, i);
+                serviceCardMap.set(s.id, { data: s, el });
+                grid.appendChild(el);
+            }
         });
 
-        $$("[data-svc-action]").forEach((btn) => {
+        syncChildren(grid, list.map((s) => serviceCardMap.get(s.id).el));
+    }
+
+    function createServiceCard(s, i) {
+        const cls = svcStatusClass(s.active_state);
+        const card = document.createElement("div");
+        card.className = `bot-card ${cls === "running" ? "active" : cls === "failed" ? "failed" : "inactive"}`;
+        card.style.animationDelay = `${i * 0.08}s`;
+        card.setAttribute("data-id", s.id);
+        const isRunning = s.active_state === "active";
+        card.innerHTML = `
+            <div class="bot-card-top">
+                <div class="bot-info">
+                    <div class="bot-icon">${escapeHtml(s.icon || "⚙️")}</div>
+                    <div>
+                        <div class="bot-name">${escapeHtml(s.label)}</div>
+                        <div class="bot-type">${escapeHtml(s.unit)}</div>
+                    </div>
+                </div>
+                <span class="svc-status ${cls}">${escapeHtml(SERVICE_STATE_LABEL[s.active_state] || s.active_state)}</span>
+            </div>
+            <div class="bot-actions">
+                ${isRunning
+                    ? `<button class="btn-action stop" data-svc-action="stop" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">⏹ Stop</button>`
+                    : `<button class="btn-action start" data-svc-action="start" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">▶ Start</button>`}
+                <button class="btn-action restart" data-svc-action="restart" data-id="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">🔁 Restart</button>
+                <button class="btn-action logs" data-svc-logs="${escapeHtml(s.id)}" data-label="${escapeHtml(s.label)}">📜 Logs</button>
+            </div>
+        `;
+        bindServiceActions(card);
+        return card;
+    }
+
+    function bindServiceActions(card) {
+        card.querySelectorAll("[data-svc-action]").forEach((btn) => {
             btn.addEventListener("click", async () => {
                 const action = btn.dataset.svcAction;
                 const id = btn.dataset.id;
@@ -287,7 +430,7 @@
                 }
                 if (!confirm(warn)) return;
                 const original = btn.textContent;
-                grid.querySelectorAll("button").forEach((b) => (b.disabled = true));
+                card.querySelectorAll("button").forEach((b) => (b.disabled = true));
                 btn.textContent = "Memproses…";
                 try {
                     const res = await fetch(`${API_BASE}/api/services/${encodeURIComponent(id)}/action/${action}`, {
@@ -306,8 +449,7 @@
                 }
             });
         });
-
-        $$("[data-svc-logs]").forEach((btn) => {
+        card.querySelectorAll("[data-svc-logs]").forEach((btn) => {
             btn.addEventListener("click", () => {
                 openLogsModal(btn.dataset.svcLogs, btn.dataset.label);
             });
@@ -410,13 +552,23 @@
     // relevant if "enable_ssh_power" is checked — WOL itself needs none of
     // that, it's just a MAC address.
     function updateSshFieldVisibility() {
-        const isWol = protocolSelect.value === "wol";
-        const showSsh = !isWol || sshPowerCheckbox.checked;
-        portWrap.classList.toggle("hidden", !showSsh);
+        const protocol = protocolSelect.value;
+        const isWol = protocol === "wol";
+        const isAndroid = protocol === "android";
+        
+        // Android needs Host & Port, NO username/auth.
+        // SSH needs all.
+        // WOL needs all IF sshPowerCheckbox is checked.
+        const showSsh = protocol === "ssh" || (isWol && sshPowerCheckbox.checked);
+        const showHostPort = protocol === "android" || showSsh;
+        
+        portWrap.classList.toggle("hidden", !showHostPort);
+        hostInput.required = showHostPort;
+        
         usernameWrap.classList.toggle("hidden", !showSsh);
         authTypeWrap.classList.toggle("hidden", !showSsh);
-        hostInput.required = showSsh;
         usernameInput.required = showSsh;
+        
         if (showSsh) {
             updateAuthFieldVisibility();
         } else {
@@ -426,15 +578,25 @@
     }
 
     function updateProtocolFieldVisibility() {
-        const isWol = protocolSelect.value === "wol";
+        const protocol = protocolSelect.value;
+        const isWol = protocol === "wol";
+        const isAndroid = protocol === "android";
         macWrap.classList.toggle("hidden", !isWol);
         sshPowerWrap.classList.toggle("hidden", !isWol);
         if (!isWol) sshPowerCheckbox.checked = false;
+        
         updateSshFieldVisibility();
+        
         if (isWol) {
             osSelect.value = "windows";
+        } else if (isAndroid) {
+            portInput.value = 5555;
+            osSelect.value = "android";
         } else {
             portInput.value = 22;
+            // Switching away from Android: "android" is not a valid OS for an
+            // SSH device, and leaving it set breaks the power commands.
+            if (osSelect.value === "android") osSelect.value = "linux";
         }
     }
 
@@ -453,7 +615,8 @@
             deviceError.textContent = "";
 
             const protocol = protocolSelect.value;
-            const showSsh = protocol === "ssh" || sshPowerCheckbox.checked;
+            const showSsh = protocol === "ssh" || (protocol === "wol" && sshPowerCheckbox.checked);
+            const showPortOnly = protocol === "android";
             const payload = {
                 label: $("#d-label").value.trim(),
                 icon: $("#d-icon").value.trim() || undefined,
@@ -465,8 +628,10 @@
                 payload.mac_address = $("#d-mac").value.trim();
                 payload.enable_ssh_power = sshPowerCheckbox.checked;
             }
+            if (showSsh || showPortOnly) {
+                payload.port = parseInt(portInput.value, 10) || (protocol === "android" ? 5555 : 22);
+            }
             if (showSsh) {
-                payload.port = parseInt(portInput.value, 10) || 22;
                 payload.username = $("#d-username").value.trim();
                 payload.auth_type = authTypeSelect.value;
                 if (payload.auth_type === "key") {
@@ -665,56 +830,101 @@
         if (!listEl) return;
         if (!data || !Array.isArray(data.processes)) {
             listEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.75rem">Gagal load proses</p>';
+            procRowMap.clear();
             return;
         }
         const rows = data.processes;
         if (rows.length === 0) {
             listEl.innerHTML = '<p style="color:var(--text-muted);font-size:0.75rem">Tidak ada data proses</p>';
+            procRowMap.clear();
             return;
         }
-        listEl.innerHTML = "";
+
+        const currentPids = new Set(rows.map((p) => p.top_pid));
+        for (const [pid, cached] of procRowMap) {
+            if (!currentPids.has(pid)) {
+                cached.el.remove();
+                procRowMap.delete(pid);
+            }
+        }
+
         rows.forEach((p) => {
-            // usage % drives the background bar width + hot/warm coloring
             const usage = procSort === "cpu" ? p.cpu : p.mem_percent;
             const heat = usage > 60 ? "hot" : usage > 25 ? "warm" : "";
-            const row = document.createElement("div");
-            row.className = `proc-row ${heat}`;
-            row.style.setProperty("--usage", `${Math.min(usage, 100)}%`);
-            row.setAttribute("role", "button");
-            row.tabIndex = 0;
-
-            let valMain, valSub;
-            if (procSort === "cpu") {
-                valMain = `${p.cpu.toFixed(1)}%`;
-                valSub = formatBytes(p.mem_bytes);
+            const cached = procRowMap.get(p.top_pid);
+            if (cached) {
+                const prev = cached.data;
+                const changed =
+                    prev.cpu !== p.cpu ||
+                    prev.mem_percent !== p.mem_percent ||
+                    prev.mem_bytes !== p.mem_bytes ||
+                    prev.count !== p.count ||
+                    prev.label !== (p.label || prettyProcName(p.name)) ||
+                    prev.project !== p.project ||
+                    prev.user !== p.user ||
+                    prev.top_pid !== p.top_pid;
+                if (changed) {
+                    cached.el.className = `proc-row ${heat}`;
+                    cached.el.style.setProperty("--usage", `${Math.min(usage, 100)}%`);
+                    let valMain, valSub;
+                    if (procSort === "cpu") {
+                        valMain = `${p.cpu.toFixed(1)}%`;
+                        valSub = formatBytes(p.mem_bytes);
+                    } else {
+                        valMain = formatBytes(p.mem_bytes);
+                        valSub = `${p.mem_percent.toFixed(1)}% RAM`;
+                    }
+                    const countBadge = p.count > 1
+                        ? `<span class="proc-count">×${p.count}</span>`
+                        : "";
+                    const label = p.label || prettyProcName(p.name);
+                    const sub = p.project ? prettyProcName(p.name) : (p.user || "system");
+                    cached.el.querySelector(".proc-name").innerHTML = `${escapeHtml(label)}${countBadge}`;
+                    cached.el.querySelector(".proc-meta").textContent = sub;
+                    cached.el.querySelector(".proc-val").innerHTML = `${escapeHtml(valMain)}<span class="proc-val-sub">${escapeHtml(valSub)}</span>`;
+                    cached.data = { ...p, label };
+                }
             } else {
-                valMain = formatBytes(p.mem_bytes);
-                valSub = `${p.mem_percent.toFixed(1)}% RAM`;
+                const row = document.createElement("div");
+                row.className = `proc-row ${heat}`;
+                row.style.setProperty("--usage", `${Math.min(usage, 100)}%`);
+                row.setAttribute("role", "button");
+                row.tabIndex = 0;
+                row.setAttribute("data-pid", p.top_pid);
+
+                let valMain, valSub;
+                if (procSort === "cpu") {
+                    valMain = `${p.cpu.toFixed(1)}%`;
+                    valSub = formatBytes(p.mem_bytes);
+                } else {
+                    valMain = formatBytes(p.mem_bytes);
+                    valSub = `${p.mem_percent.toFixed(1)}% RAM`;
+                }
+                const countBadge = p.count > 1
+                    ? `<span class="proc-count">×${p.count}</span>`
+                    : "";
+                const label = p.label || prettyProcName(p.name);
+                const sub = p.project ? prettyProcName(p.name) : (p.user || "system");
+
+                row.innerHTML = `
+                    <div class="proc-name-wrap">
+                        <span class="proc-name">${escapeHtml(label)}${countBadge}</span>
+                        <span class="proc-meta">${escapeHtml(sub)}</span>
+                    </div>
+                    <div class="proc-val">${escapeHtml(valMain)}<span class="proc-val-sub">${escapeHtml(valSub)}</span></div>
+                    <span class="proc-chevron">›</span>
+                `;
+                const open = () => openProcModal(p.top_pid, label);
+                row.addEventListener("click", open);
+                row.addEventListener("keydown", (e) => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
+                });
+                procRowMap.set(p.top_pid, { data: { ...p, label }, el: row });
+                listEl.appendChild(row);
             }
-
-            // "×4" count badge when a group bundles multiple processes
-            const countBadge = p.count > 1
-                ? `<span class="proc-count">×${p.count}</span>`
-                : "";
-            // when we grouped by project, show the tech (Next.js/Node) as sub
-            const label = p.label || prettyProcName(p.name);
-            const sub = p.project ? prettyProcName(p.name) : (p.user || "system");
-
-            row.innerHTML = `
-                <div class="proc-name-wrap">
-                    <span class="proc-name">${escapeHtml(label)}${countBadge}</span>
-                    <span class="proc-meta">${escapeHtml(sub)}</span>
-                </div>
-                <div class="proc-val">${escapeHtml(valMain)}<span class="proc-val-sub">${escapeHtml(valSub)}</span></div>
-                <span class="proc-chevron">›</span>
-            `;
-            const open = () => openProcModal(p.top_pid, label);
-            row.addEventListener("click", open);
-            row.addEventListener("keydown", (e) => {
-                if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); }
-            });
-            listEl.appendChild(row);
         });
+
+        syncChildren(listEl, rows.map((p) => procRowMap.get(p.top_pid).el));
     }
 
     // toggle CPU / RAM
@@ -722,6 +932,9 @@
         btn.addEventListener("click", async () => {
             if (procSort === btn.dataset.procSort) return;
             procSort = btn.dataset.procSort;
+            procRowMap.clear();
+            const listEl = $("#proc-list");
+            if (listEl) listEl.innerHTML = "";
             $$("[data-proc-sort]").forEach((b) => b.classList.toggle("active", b === btn));
             const data = await api(`/api/processes?sort=${procSort}`);
             renderProcesses(data);

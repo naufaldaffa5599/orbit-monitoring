@@ -731,6 +731,11 @@
                 tab.ws.onclose = null; // don't trigger reconnect logic on manual close
                 tab.ws.close();
             }
+            // Closing the websocket only detaches now — the shell itself lives
+            // in tmux on the target so it survives restarts, which means an
+            // explicit close has to say so or the session leaks over there.
+            fetch(`/api/devices/${encodeURIComponent(deviceId)}/sessions/${encodeURIComponent(tab.sessionId)}`,
+                { method: "DELETE", keepalive: true }).catch(() => { });
             tab.term.dispose();
             tab.paneEl.remove();
             tab.tabBtn.remove();
