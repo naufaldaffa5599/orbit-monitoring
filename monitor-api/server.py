@@ -566,8 +566,9 @@ async def delete_device(device_id: str):
     return {"ok": True}
 
 
-def _ssh_exit_status(client: paramiko.SSHClient, command: str, timeout: float = 8.0) -> int:
-    """Run a short command and return its exit code, or -1 on timeout.
+def _ssh_run(client: paramiko.SSHClient, command: str,
+             timeout: float = 8.0) -> tuple[int, str]:
+    """Run a short command, returning (exit_code, stdout). -1 on timeout.
 
     recv_exit_status() waits on the channel with no deadline of its own and is
     documented to hang if nothing drains stdout, so this polls and reads
@@ -575,15 +576,25 @@ def _ssh_exit_status(client: paramiko.SSHClient, command: str, timeout: float = 
     """
     _, stdout, _ = client.exec_command(command, timeout=timeout)
     chan = stdout.channel
+    chunks: list[bytes] = []
     deadline = time.monotonic() + timeout
-    while not chan.exit_status_ready():
+    while True:
+        while chan.recv_ready():
+            chunks.append(chan.recv(32768))
+        if chan.exit_status_ready() and not chan.recv_ready():
+            break
         if time.monotonic() > deadline:
             chan.close()
-            return -1
-        if chan.recv_ready():
-            chan.recv(4096)
+            return -1, b"".join(chunks).decode(errors="replace")
         time.sleep(0.05)
-    return chan.recv_exit_status()
+    while chan.recv_ready():
+        chunks.append(chan.recv(32768))
+    return chan.recv_exit_status(), b"".join(chunks).decode(errors="replace")
+
+
+def _ssh_exit_status(client: paramiko.SSHClient, command: str,
+                     timeout: float = 8.0) -> int:
+    return _ssh_run(client, command, timeout)[0]
 
 
 def _ssh_connect(device: dict) -> paramiko.SSHClient:
@@ -622,13 +633,30 @@ SSH_BUFFER_MAX = 200_000  # chars of scrollback kept for replay on reattach
 # machine instead: we attach on connect and detach on disconnect, so the API
 # becomes disposable. Targets without tmux (Windows) just get a plain shell.
 TMUX_SUPPORT: dict[str, bool] = {}  # device_id → tmux available, probed once
-_TMUX_NAME_RE = re.compile(r"[^A-Za-z0-9_-]")
+
+# The tmux session list on the target is the authoritative record of which
+# terminals exist for a device — it outlives this process and every browser,
+# which is what lets you pick a session up from a different phone/laptop. That
+# only works if the name round-trips back to a session id, so ids are
+# restricted to a charset tmux is happy with (no '.' or ':') and short enough
+# that nothing gets truncated. Anything else is rejected rather than mangled.
+TMUX_PREFIX = "mh-"
+_SESSION_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 
 
 def _tmux_session_name(session_id: str) -> str:
-    """tmux session names can't contain '.' or ':', and this ends up in a
-    shell command — so keep it to a conservative charset."""
-    return "mh-" + _TMUX_NAME_RE.sub("", session_id)[:32]
+    # This gets interpolated into a shell command, so the charset check is
+    # load-bearing, not cosmetic — enforce it here so no caller can skip it.
+    if not _SESSION_ID_RE.match(session_id):
+        raise ValueError(f"invalid session id: {session_id!r}")
+    return TMUX_PREFIX + session_id
+
+
+def _session_id_from_tmux(name: str) -> str | None:
+    if not name.startswith(TMUX_PREFIX):
+        return None
+    sid = name[len(TMUX_PREFIX):]
+    return sid if _SESSION_ID_RE.match(sid) else None
 
 
 def _open_shell(device: dict, device_id: str, session_id: str):
@@ -730,6 +758,11 @@ async def ssh_terminal(websocket: WebSocket, device_id: str, session_id: str):
     if not device:
         await websocket.close(code=4404)
         return
+    if not _SESSION_ID_RE.match(session_id):
+        await websocket.send_text(
+            "\r\n\x1b[31mInvalid session id.\x1b[0m\r\n")
+        await websocket.close(code=4400)
+        return
 
     key = (device_id, session_id)
     with SSH_SESSIONS_LOCK:
@@ -784,6 +817,78 @@ async def ssh_terminal(websocket: WebSocket, device_id: str, session_id: str):
             session.idle_handle = loop.call_later(SSH_IDLE_TIMEOUT, _teardown)
 
 
+def _live_client(device_id: str) -> paramiko.SSHClient | None:
+    """An already-open SSH connection to this device, if any — listing
+    sessions shouldn't pay for a fresh handshake when a terminal is open."""
+    with SSH_SESSIONS_LOCK:
+        for (did, _), sess in SSH_SESSIONS.items():
+            if did == device_id and not sess.channel.closed:
+                return sess.client
+    return None
+
+
+_TMUX_LIST_CMD = (
+    "tmux list-sessions -F "
+    "'#{session_name}\t#{session_created}\t#{session_attached}'"
+)
+
+
+def _collect_sessions(device: dict, device_id: str) -> list[dict]:
+    """Terminals that exist for this device, newest last.
+
+    tmux sessions on the target are the durable ones; the in-memory registry
+    is folded in too so devices without tmux (Windows) still list whatever is
+    currently open instead of nothing.
+    """
+    found: dict[str, dict] = {}
+
+    if TMUX_SUPPORT.get(device_id, True):
+        client = _live_client(device_id)
+        own_client = client is None
+        try:
+            if own_client:
+                client = _ssh_connect(device)
+            rc, out = _ssh_run(client, _TMUX_LIST_CMD)
+            # rc != 0 is the normal "no server running" case, not an error.
+            if rc == 0:
+                TMUX_SUPPORT[device_id] = True
+                for line in out.splitlines():
+                    parts = line.strip().split("\t")
+                    if len(parts) != 3:
+                        continue
+                    sid = _session_id_from_tmux(parts[0])
+                    if not sid:
+                        continue  # someone else's tmux session, not ours
+                    found[sid] = {
+                        "id": sid,
+                        "created_at": int(parts[1]) if parts[1].isdigit() else None,
+                        "attached": parts[2] == "1",
+                        "persistent": True,
+                    }
+        except Exception as e:
+            print(f"⚠️  tmux list-sessions failed for {device_id}: {e}")
+        finally:
+            if own_client and client is not None:
+                client.close()
+
+    with SSH_SESSIONS_LOCK:
+        open_ids = [sid for (did, sid) in SSH_SESSIONS if did == device_id]
+    for sid in open_ids:
+        found.setdefault(sid, {"id": sid, "created_at": None,
+                               "attached": True, "persistent": False})
+
+    return sorted(found.values(), key=lambda s: s["created_at"] or 0)
+
+
+@app.get("/api/devices/{device_id}/sessions")
+async def list_ssh_sessions(device_id: str):
+    device = DEVICES.get(device_id)
+    if not device:
+        raise HTTPException(404, "device not found")
+    sessions = await asyncio.to_thread(_collect_sessions, device, device_id)
+    return {"persistent": bool(TMUX_SUPPORT.get(device_id)), "sessions": sessions}
+
+
 @app.delete("/api/devices/{device_id}/sessions/{session_id}")
 async def kill_ssh_session(device_id: str, session_id: str):
     """Explicitly end a terminal session (the tab's ✕ button).
@@ -793,6 +898,8 @@ async def kill_ssh_session(device_id: str, session_id: str):
     device = DEVICES.get(device_id)
     if not device:
         raise HTTPException(404, "device not found")
+    if not _SESSION_ID_RE.match(session_id):
+        raise HTTPException(400, "invalid session id")
 
     key = (device_id, session_id)
     with SSH_SESSIONS_LOCK:
@@ -811,6 +918,13 @@ async def kill_ssh_session(device_id: str, session_id: str):
             print(f"⚠️  tmux kill-session failed for {device_id}/{session_id}: {e}")
 
     if session:
+        # Boot any other device still attached to this session, so it sees a
+        # clean close instead of a channel that silently stopped working.
+        for ws in list(session.websockets):
+            try:
+                await ws.close(code=4410)
+            except Exception:
+                pass
         session.close()
     return {"ok": True}
 

@@ -469,27 +469,21 @@
         document.title = `${label} — Terminal`;
         document.getElementById("title").textContent = label;
 
-        // Which tabs (session ids) are open for this device is remembered in
-        // localStorage. Closing this whole browser tab/window (e.g. the
-        // ← Dashboard button, or just closing Chrome) used to silently lose
-        // every session — the SSH shells actually kept running server-side
-        // for hours, but there was no way left to get back to them, since
-        // clicking Connect again minted a brand new random session id. Now
-        // reopening the same device restores every tab that was open,
-        // reattaching each one to its still-alive shell with history intact.
-        const STORAGE_KEY = `terminal-tabs:${deviceId}`;
-        function loadSavedSessionIds() {
+        // Which terminals exist for a device is the server's business, not
+        // this browser's. It reads them off tmux on the target machine, so the
+        // list is the same whether you open this page from the laptop you
+        // started the session on, a different browser, or your phone — pick up
+        // exactly where you left off. (This used to live in localStorage,
+        // which meant sessions were invisible from any other device.)
+        async function fetchSessions() {
             try {
-                const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-                return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+                const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/sessions`);
+                if (!res.ok) return [];
+                const data = await res.json();
+                return Array.isArray(data.sessions) ? data.sessions : [];
             } catch (e) {
-                return [];
+                return []; // offline/API down — start a fresh tab rather than hang
             }
-        }
-        function saveSessionIds() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs.map((t) => t.sessionId)));
-            } catch (e) { /* storage full/unavailable — worst case just don't persist */ }
         }
 
         // If this tab was opened from the dashboard (window.open), just close
@@ -634,9 +628,13 @@
             tab.term.focus();
         }
 
+        // Becomes a tmux session name on the target, so it has to stay inside
+        // the charset the server accepts ([A-Za-z0-9_-], max 32) — a raw UUID
+        // is fine too but this keeps the name readable in `tmux ls`.
         function newSessionId() {
-            return (crypto.randomUUID && crypto.randomUUID()) ||
-                `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const b = new Uint8Array(6);
+            crypto.getRandomValues(b);
+            return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
         }
 
         // Tab labels reflect current POSITION ("Tab 1", "Tab 2", ...), not an
@@ -688,7 +686,6 @@
             };
             tabs.push(tab);
             relabelTabs();
-            saveSessionIds();
 
             tabBtn.addEventListener("click", (e) => {
                 if (e.target.closest("[data-close]")) {
@@ -740,7 +737,6 @@
             tab.paneEl.remove();
             tab.tabBtn.remove();
             relabelTabs();
-            saveSessionIds();
 
             if (tabs.length === 0) {
                 createTab(); // never end up with zero tabs
@@ -1054,13 +1050,32 @@
             paneEl.textContent = "No device specified.";
             document.getElementById("terminals-container").appendChild(paneEl);
         } else {
-            const saved = loadSavedSessionIds();
-            if (saved.length > 0) {
-                saved.forEach((sid) => createTab(sid));
-                switchTab(tabs[0].id); // show "Tab 1" first, not whichever was restored last
-            } else {
-                createTab();
-            }
+            (async () => {
+                const sessions = await fetchSessions();
+                if (sessions.length > 0) {
+                    sessions.forEach((s) => createTab(s.id));
+                    switchTab(tabs[0].id); // show "Tab 1" first, not whichever came last
+                } else {
+                    createTab();
+                }
+                // A session started elsewhere (other laptop, phone) won't be in
+                // the list this page loaded with, so re-check whenever the page
+                // comes back to the foreground and adopt anything new. Tabs are
+                // only ever added here — a list that came back short because the
+                // API blipped must not close a terminal you're working in.
+                document.addEventListener("visibilitychange", async () => {
+                    if (document.visibilityState !== "visible") return;
+                    const known = new Set(tabs.map((t) => t.sessionId));
+                    const wasActive = activeTabId;
+                    let adopted = false;
+                    for (const s of await fetchSessions()) {
+                        if (!known.has(s.id)) { createTab(s.id); adopted = true; }
+                    }
+                    // createTab focuses what it creates; don't yank the user out
+                    // of the terminal they were already looking at.
+                    if (adopted && tabs.some((t) => t.id === wasActive)) switchTab(wasActive);
+                });
+            })();
         }
     </script>
 </body>
