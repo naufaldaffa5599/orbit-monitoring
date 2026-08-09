@@ -359,3 +359,28 @@ func TestASCIIOnly(t *testing.T) {
 		}
 	}
 }
+
+// A known-answer test, because the receiver is the only other thing that knows
+// this format and it will not tell us why it rejected us. The digest below came
+// from `openssl dgst -sha256 -hmac`, so it pins the composition — timestamp,
+// then a literal dot, then the raw body — independently of this code.
+func TestWebhookSignature(t *testing.T) {
+	const (
+		secret  = "s3cr3t"
+		ts      = "1700000000"
+		payload = `{"title":"probe"}`
+		want    = "7d795dcb5fe7fb6857bc34f42f294bbbd2023f0133d99e59f1be83c004b6462a"
+	)
+
+	if got := webhookSignature(secret, ts, []byte(payload)); got != want {
+		t.Errorf("webhookSignature = %q, want %q", got, want)
+	}
+
+	// Replay protection is only real if the timestamp actually reaches the MAC:
+	// signing it alongside the body rather than into it would leave the digest
+	// unchanged here, and a captured request would stay valid forever.
+	moved := webhookSignature(secret, "1700000001", []byte(payload))
+	if moved == want {
+		t.Error("signature ignores the timestamp — replay protection is not wired up")
+	}
+}

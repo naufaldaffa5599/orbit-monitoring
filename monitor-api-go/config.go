@@ -113,6 +113,7 @@ func initConfig() {
 
 	// Where check state changes are announced. Empty disables notifications.
 	notifyURL = os.Getenv("NOTIFY_WEBHOOK")
+	notifySecret = os.Getenv("NOTIFY_SECRET")
 
 	router9URL = os.Getenv("ROUTER9_URL")
 	router9Pass = os.Getenv("ROUTER9_PASSWORD")

@@ -2,9 +2,15 @@ package main
 
 import (
 	"bytes"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +41,13 @@ const (
 )
 
 var notifyURL string // NOTIFY_WEBHOOK
+
+// Shared secret for signing the POST. Receivers that accept webhooks from
+// anywhere on the network — Hermes, for one — reject an unsigned request, and
+// a secret is the only thing distinguishing us from anything else that can
+// reach the port. Empty sends unsigned, which is fine for Discord and ntfy:
+// there the URL is itself the credential.
+var notifySecret string // NOTIFY_SECRET
 
 var notifyClient = &http.Client{Timeout: notifyTimeout}
 
@@ -118,12 +131,18 @@ func notifyTransitions(list []transition) {
 		title := fmt.Sprintf("%d check berubah status", len(list))
 		body := fmt.Sprintf("%d down, %d pulih. Buka dashboard buat detailnya.",
 			down, len(list)-down)
-		send(title, body, down > 0)
+		logSendErr(send(title, body, down > 0))
 		return
 	}
 	for _, t := range list {
 		title, body := describe(t)
-		send(title, body, t.down)
+		logSendErr(send(title, body, t.down))
+	}
+}
+
+func logSendErr(err error) {
+	if err != nil {
+		fmt.Printf("⚠️  Gagal kirim notifikasi: %v\n", err)
 	}
 }
 
@@ -170,8 +189,12 @@ func humanDuration(d time.Duration) string {
 // ── Transports ──────────────────────────────────────────────────────────────
 
 // send picks a payload shape from the URL. Nothing about the URL is ever
-// logged: a webhook URL is a credential.
-func send(title, body string, bad bool) {
+// logged or returned: a webhook URL is a credential.
+//
+// The error is returned rather than only printed so the "test notification"
+// button can say what went wrong. Silently reporting success while the POST
+// failed is worse than useless when you are trying to get a relay talking.
+func send(title, body string, bad bool) error {
 	var (
 		payload     []byte
 		contentType = "application/json"
@@ -220,23 +243,56 @@ func send(title, body string, bad bool) {
 
 	req, err := http.NewRequest(http.MethodPost, notifyURL, bytes.NewReader(payload))
 	if err != nil {
-		fmt.Printf("⚠️  NOTIFY_WEBHOOK bukan URL yang valid\n")
-		return
+		return errors.New("NOTIFY_WEBHOOK bukan URL yang valid")
 	}
 	req.Header.Set("Content-Type", contentType)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}
 
+	// Driven by the secret alone, deliberately independent of which payload
+	// shape was picked above: signing is about who is allowed to post here, not
+	// about what the message looks like.
+	if notifySecret != "" {
+		ts := strconv.FormatInt(time.Now().Unix(), 10)
+		req.Header.Set("X-Webhook-Timestamp", ts)
+		req.Header.Set("X-Webhook-Signature-V2", webhookSignature(notifySecret, ts, payload))
+	}
+
 	resp, err := notifyClient.Do(req)
 	if err != nil {
-		fmt.Printf("⚠️  Gagal kirim notifikasi: %v\n", err)
-		return
+		// http.Client wraps every failure in *url.Error, whose message embeds
+		// the full URL — and this text now reaches the dashboard as well as the
+		// log. Only the inner cause is kept, so the credential stays out of both.
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			err = uerr.Err
+		}
+		return fmt.Errorf("webhook nggak bisa dihubungi: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		fmt.Printf("⚠️  Webhook notifikasi balas %d\n", resp.StatusCode)
+		// 401/403 here almost always means the signature was rejected: either
+		// NOTIFY_SECRET disagrees with the receiver's, or nothing is signed at all.
+		return fmt.Errorf("webhook balas %d", resp.StatusCode)
 	}
+	return nil
+}
+
+// webhookSignature implements the "generic V2" scheme: a hex HMAC-SHA256 over
+// "<unix seconds>.<raw body>". Binding the timestamp into the signed material
+// is what makes it replay-resistant — the receiver refuses a timestamp more
+// than a few minutes off its own clock, and the timestamp cannot be edited
+// without invalidating the digest.
+//
+// Pure, so the wire format can be pinned by a test rather than by standing up
+// a receiver and hoping.
+func webhookSignature(secret, timestamp string, payload []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp))
+	mac.Write([]byte("."))
+	mac.Write(payload)
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // ── HTTP ────────────────────────────────────────────────────────────────────
@@ -265,8 +321,10 @@ func handleNotifyTest(w http.ResponseWriter, r *http.Request) error {
 	if notifyURL == "" {
 		return errf(409, "NOTIFY_WEBHOOK belum diisi di .env")
 	}
-	send("🔔 Tes notifikasi Orbit",
-		"Kalau ini nyampe, notifikasi check bakal nyampe juga.", false)
+	if err := send("🔔 Tes notifikasi Orbit",
+		"Kalau ini nyampe, notifikasi check bakal nyampe juga.", false); err != nil {
+		return errf(502, err.Error())
+	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 	return nil
 }
