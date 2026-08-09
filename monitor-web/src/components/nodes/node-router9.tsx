@@ -2,7 +2,6 @@ import { useCallback } from "react"
 import { Crumbs } from "@/components/shell/app-shell"
 import { Panel, PanelBody, PanelHead, PanelMessage, RowSkeleton } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
-import { ExcelTable } from "@/components/ui/excel-style-table"
 import {
   ChartContainer,
   ChartTooltip,
@@ -306,26 +305,80 @@ export function Router9View({ node }: { node: TreeNode }) {
       )}
 
       <Panel>
+        <PanelHead title="Pemakaian per model">
+          {models.length > 0 && (
+            <span className="tabular text-xs text-muted-foreground">
+              {models.length} model
+            </span>
+          )}
+        </PanelHead>
         {loading && !usage ? (
           <RowSkeleton />
         ) : models.length === 0 ? (
           <PanelMessage>Belum ada pemakaian per model.</PanelMessage>
         ) : (
-          <PanelBody className="p-0">
-            <ExcelTable
-              title="Pemakaian per model"
-              headers={["Model", "Req", "Prompt", "Compl", "OK", "Err"]}
-              data={models.map((m) => [
-                m.model,
-                String(m.requests),
-                fmt(m.prompt),
-                fmt(m.completion),
-                String(m.success),
-                String(m.errors),
-              ])}
-              editable={false}
-            />
-          </PanelBody>
+          // Six columns of numbers do not fit a phone, so the table scrolls
+          // inside its own box rather than making the page scroll sideways.
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b bg-panel-head text-xs text-muted-foreground">
+                  {/* w-full makes the name column absorb every spare pixel, so
+                      the number columns sit against the right edge instead of
+                      drifting apart on a wide screen. */}
+                  <th className="w-full px-3.5 py-2 text-left font-medium">Model</th>
+                  <th className="px-3.5 py-2 text-right font-medium">Request</th>
+                  <th className="px-3.5 py-2 text-right font-medium">Prompt</th>
+                  <th className="px-3.5 py-2 text-right font-medium">Completion</th>
+                  <th className="px-3.5 py-2 text-right font-medium">Sukses</th>
+                  <th className="px-3.5 py-2 text-right font-medium">Gagal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {models.map((m) => (
+                  <tr
+                    key={m.model}
+                    className="border-b last:border-0 hover:bg-white/[0.03]"
+                  >
+                    {/* Never truncated. The name is what identifies the row,
+                        and clipping it turned four different deepseek builds
+                        into four identical "deepseek-v4-…" lines. If it does
+                        not fit, the table scrolls. */}
+                    <td className="px-3.5 py-2 font-medium whitespace-nowrap">
+                      {m.model}
+                    </td>
+                    <td className="tabular px-3.5 py-2 text-right whitespace-nowrap">
+                      {fmt(m.requests)}
+                    </td>
+                    <td className="tabular px-3.5 py-2 text-right whitespace-nowrap">
+                      {fmt(m.prompt)}
+                    </td>
+                    <td className="tabular px-3.5 py-2 text-right whitespace-nowrap">
+                      {fmt(m.completion)}
+                    </td>
+                    {/* Coloured only when non-zero: a column of green and red
+                        zeroes reads as a status report on nothing. */}
+                    <td
+                      className={cn(
+                        "tabular px-3.5 py-2 text-right whitespace-nowrap",
+                        m.success > 0 ? "text-ok" : "text-muted-foreground",
+                      )}
+                    >
+                      {fmt(m.success)}
+                    </td>
+                    <td
+                      className={cn(
+                        "tabular px-3.5 py-2 text-right whitespace-nowrap",
+                        m.errors > 0 ? "text-destructive" : "text-muted-foreground",
+                      )}
+                    >
+                      {fmt(m.errors)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </Panel>
 
