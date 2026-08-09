@@ -1,10 +1,11 @@
 // Service Worker — Monitor Hub
-const CACHE_NAME = "monitor-hub-v6";
+const CACHE_NAME = "monitor-hub-v7";
 const ASSETS = [
     "/",
     "/index.html",
     "/style.css",
     "/app.js",
+    "/shader-bg.js",
     "/manifest.json",
     "/icons/icon-192.png",
     "/icons/icon-512.png",

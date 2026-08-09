@@ -1,0 +1,20 @@
+{
+  "$comment": "Single source of truth for the Orbit mark. Read by orbit-mark.tsx (the topbar) and by scripts/generate-icons.mjs (favicon + PWA icons). Change it here and run `npm run icons`.",
+  "viewBox": 24,
+  "ellipse": {
+    "cx": 12,
+    "cy": 12,
+    "rx": 10.4,
+    "ry": 5.6,
+    "strokeWidth": 2.2,
+    "rotate": -28
+  },
+  "dot": {
+    "cx": 12,
+    "cy": 12,
+    "r": 2.8
+  },
+  "brand": "#e57000",
+  "background": "#0b0d12",
+  "iconScale": 0.56
+}

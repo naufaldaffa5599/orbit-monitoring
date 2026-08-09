@@ -69,17 +69,15 @@
         setTimeout(() => el.remove(), 3000);
     }
 
-    function setRing(id, percent) {
+    // Horizontal usage bar (Proxmox-style). The class is always reassigned,
+    // otherwise a gauge that spiked once stays red/yellow forever.
+    function setGauge(id, percent) {
         const el = document.getElementById(id);
         if (!el) return;
-        const circumference = 326.73;
-        const offset = circumference * (1 - Math.min(percent, 100) / 100);
-        el.style.strokeDashoffset = offset;
-        // Color change based on value — always reassigned, otherwise a ring
-        // that spiked once stays red/yellow forever.
-        if (percent > 90) el.style.stroke = "var(--red)";
-        else if (percent > 70) el.style.stroke = "var(--yellow)";
-        else el.style.stroke = "";
+        const pct = Math.max(0, Math.min(percent || 0, 100));
+        el.style.width = `${pct}%`;
+        el.classList.toggle("crit", pct > 90);
+        el.classList.toggle("warn", pct > 70 && pct <= 90);
     }
 
     // The grids/lists ship a <div class="skeleton-card"> placeholder in the
@@ -103,7 +101,7 @@
 
     startRefresh();
 
-    // ── Tabs ────────────────────────────────────────────────────
+    // ── Resource tree / tabs ────────────────────────────────────
     tabs.forEach((tab) => {
         tab.addEventListener("click", () => {
             tabs.forEach((t) => t.classList.remove("active"));
@@ -114,9 +112,33 @@
                 const el = $(`#tab-${t}`);
                 if (el) el.classList.toggle("hidden", t !== target);
             });
+            closeSidebar();
             refreshData();
         });
     });
+
+    // ── Sidebar drawer (mobile) ─────────────────────────────────
+    const sidebar = $("#sidebar");
+    const sidebarBackdrop = $("#sidebar-backdrop");
+
+    function closeSidebar() {
+        if (!sidebar) return;
+        sidebar.classList.remove("open");
+        if (sidebarBackdrop) sidebarBackdrop.classList.remove("show");
+    }
+
+    if (sidebar) {
+        $("#nav-toggle")?.addEventListener("click", () => {
+            const open = sidebar.classList.toggle("open");
+            if (sidebarBackdrop) sidebarBackdrop.classList.toggle("show", open);
+        });
+        sidebarBackdrop?.addEventListener("click", closeSidebar);
+        // The drawer only exists below the breakpoint; leaving it "open" on a
+        // resize would otherwise pin it over content on desktop.
+        window.addEventListener("resize", () => {
+            if (window.innerWidth > 820) closeSidebar();
+        });
+    }
 
     // ── Device Rendering ────────────────────────────────────────
     function escapeHtml(s) {
@@ -125,18 +147,25 @@
         }[c]));
     }
 
+    // Mirrors a list length onto both the panel badge and the tree entry.
+    function setCount(badgeId, treeId, text, treeText) {
+        const badge = $(badgeId);
+        if (badge) badge.textContent = text;
+        const tree = $(treeId);
+        if (tree) tree.textContent = treeText;
+    }
+
     async function renderDevices(list) {
         const grid = $("#device-grid");
-        const count = $("#device-count");
         if (!list) {
-            grid.innerHTML = '<div class="bot-card"><p style="color:var(--text-muted)">Gagal load device list</p></div>';
+            grid.innerHTML = '<div class="bot-card"><p>Gagal load device list</p></div>';
             deviceCardMap.clear();
-            if (count) count.textContent = "—";
+            setCount("#device-count", "#tree-device-count", "—", "");
             return;
         }
-        if (count) count.textContent = `${list.length} device`;
+        setCount("#device-count", "#tree-device-count", `${list.length} device`, String(list.length));
         if (list.length === 0) {
-            grid.innerHTML = '<div class="bot-card"><p style="color:var(--text-muted)">Belum ada device. Klik + Add buat nambah.</p></div>';
+            grid.innerHTML = '<div class="bot-card"><p>Belum ada device. Klik + Add device buat nambah.</p></div>';
             deviceCardMap.clear();
             return;
         }
@@ -332,14 +361,13 @@
 
     async function renderServices(list) {
         const grid = $("#service-grid");
-        const count = $("#service-count");
         if (!Array.isArray(list)) {
-            grid.innerHTML = '<div class="bot-card"><p style="color:var(--text-muted)">Gagal load service list — coba restart monitor-api.</p></div>';
+            grid.innerHTML = '<div class="bot-card"><p>Gagal load service list — coba restart monitor-api.</p></div>';
             serviceCardMap.clear();
-            if (count) count.textContent = "—";
+            setCount("#service-count", "#tree-service-count", "—", "");
             return;
         }
-        if (count) count.textContent = `${list.length} service`;
+        setCount("#service-count", "#tree-service-count", `${list.length} service`, String(list.length));
 
         const currentIds = new Set(list.map((s) => s.id));
         for (const [id, cached] of serviceCardMap) {
@@ -671,26 +699,44 @@
     // ── System Rendering ────────────────────────────────────────
     function renderSystem(data) {
         if (!data) return;
-        $("#sys-hostname").textContent = data.hostname || "—";
+        const hostname = data.hostname || "—";
+        $("#sys-hostname").textContent = hostname;
+        // The resource tree names the node too, the way Proxmox's Server View
+        // does — kept in sync here so both never disagree.
+        const treeHost = $("#tree-hostname");
+        if (treeHost) treeHost.textContent = hostname;
 
         // CPU
         $("#cpu-value").textContent = `${data.cpu.percent}%`;
-        setRing("cpu-ring", data.cpu.percent);
+        setGauge("cpu-bar", data.cpu.percent);
         const load = data.cpu.load_avg.map((l) => l.toFixed(2)).join(" / ");
-        $("#cpu-detail").textContent = `${data.cpu.count} cores · Load ${load}`;
+        $("#cpu-detail").textContent = `${data.cpu.count} CPU(s) · Load ${load}`;
 
         // RAM
         $("#ram-value").textContent = `${data.memory.percent}%`;
-        setRing("ram-ring", data.memory.percent);
+        setGauge("ram-bar", data.memory.percent);
         $("#ram-detail").textContent = `${data.memory.used_gb} / ${data.memory.total_gb} GB`;
 
         // Disk
         $("#disk-value").textContent = `${data.disk.percent}%`;
-        setRing("disk-ring", data.disk.percent);
+        setGauge("disk-bar", data.disk.percent);
         $("#disk-detail").textContent = `${data.disk.used_gb} / ${data.disk.total_gb} GB`;
 
-        // Temperature
+        // Overall health chip in the panel header — worst of the three gauges.
+        const worst = Math.max(data.cpu.percent, data.memory.percent, data.disk.percent);
+        const badge = $("#sys-badge");
+        if (badge) {
+            badge.textContent = worst > 90 ? "Critical" : worst > 70 ? "Under load" : "Healthy";
+            badge.style.color = worst > 90 ? "var(--red)" : worst > 70 ? "var(--yellow)" : "var(--green)";
+        }
+
+        // Temperature.
+        // This machine is a VM with no thermal sensors, so the reading is
+        // pulled from another host (TEMP_DEVICE on the API). That host's name
+        // leads the detail line — without it the card reads as if these were
+        // the temperatures of the machine named in the header.
         const tempEntries = Object.entries(data.temperature || {});
+        const tempSource = data.temperature_source || "";
         if (tempEntries.length > 0) {
             // Find CPU temp (prefer entries with "Core" or "Package")
             let mainTemp = null;
@@ -702,19 +748,27 @@
             }
             if (!mainTemp) mainTemp = tempEntries[0][1];
             $("#temp-value").textContent = `${mainTemp.current.toFixed(0)}°C`;
-            // Show all temps
-            const details = tempEntries
-                .slice(0, 4)
-                .map(([l, t]) => `${l}: ${t.current.toFixed(0)}°`)
-                .join(" · ");
-            $("#temp-detail").textContent = details;
+            // Show all temps. One fewer when a source is named, so the line
+            // stays roughly the same length.
+            const parts = tempEntries
+                .slice(0, tempSource ? 3 : 4)
+                .map(([l, t]) => `${l}: ${t.current.toFixed(0)}°`);
+            if (tempSource) parts.unshift(tempSource);
+            $("#temp-detail").textContent = parts.join(" · ");
         } else {
             $("#temp-value").textContent = "N/A";
-            $("#temp-detail").textContent = "No sensor data";
+            // A configured-but-unreachable source is a different problem from
+            // having no sensors at all, and says which machine to go look at.
+            $("#temp-detail").textContent = tempSource
+                ? `${tempSource} tidak terjangkau`
+                : "No sensor data";
         }
 
         // Uptime
-        $("#sys-uptime").textContent = formatUptime(data.uptime_seconds);
+        const uptime = formatUptime(data.uptime_seconds);
+        $("#sys-uptime").textContent = uptime;
+        const sidebarUptime = $("#sidebar-uptime");
+        if (sidebarUptime) sidebarUptime.textContent = `up ${uptime}`;
 
         // Network
         $("#net-sent").textContent = formatBytes(data.bytes_sent_delta || data.network?.bytes_sent);
@@ -740,7 +794,7 @@
         const ramData = historyData.ram || [];
 
         if (cpuData.length < 2) {
-            ctx.fillStyle = "rgba(148, 163, 184, 0.3)";
+            ctx.fillStyle = "rgba(179, 186, 199, 0.45)";
             ctx.font = "13px Inter, sans-serif";
             ctx.textAlign = "center";
             ctx.fillText("Collecting data...", W / 2, H / 2);
@@ -752,7 +806,7 @@
         const cH = H - pad.top - pad.bottom;
 
         // Grid lines
-        ctx.strokeStyle = "rgba(255,255,255,0.04)";
+        ctx.strokeStyle = "rgba(255,255,255,0.07)";
         ctx.lineWidth = 1;
         for (let i = 0; i <= 4; i++) {
             const y = pad.top + (cH / 4) * i;
@@ -761,7 +815,7 @@
             ctx.lineTo(W - pad.right, y);
             ctx.stroke();
             // Labels
-            ctx.fillStyle = "rgba(148, 163, 184, 0.5)";
+            ctx.fillStyle = "rgba(125, 134, 152, 0.9)";
             ctx.font = "10px Inter, sans-serif";
             ctx.textAlign = "right";
             ctx.fillText(`${100 - i * 25}%`, pad.left - 5, y + 3);
@@ -784,7 +838,7 @@
             ctx.stroke();
 
             // Fill gradient
-            ctx.globalAlpha = alpha * 0.1;
+            ctx.globalAlpha = alpha * 0.16;
             ctx.lineTo(pad.left + cW, pad.top + cH);
             ctx.lineTo(pad.left, pad.top + cH);
             ctx.closePath();
@@ -793,15 +847,15 @@
             ctx.globalAlpha = 1;
         }
 
-        drawLine(cpuData, "#3b82f6", 0.9);
-        drawLine(ramData, "#a855f7", 0.7);
+        drawLine(cpuData, "#e57000", 1);
+        drawLine(ramData, "#5b9bd5", 0.9);
 
         // Legend
         ctx.font = "10px Inter, sans-serif";
-        ctx.fillStyle = "#3b82f6";
+        ctx.fillStyle = "#e57000";
         ctx.textAlign = "left";
         ctx.fillText("● CPU", pad.left, H - 5);
-        ctx.fillStyle = "#a855f7";
+        ctx.fillStyle = "#5b9bd5";
         ctx.fillText("● RAM", pad.left + 50, H - 5);
     }
 
@@ -1048,7 +1102,7 @@
         navigator.serviceWorker.getRegistrations().then((regs) => {
             regs.forEach((r) => r.unregister());
         }).then(() => {
-            navigator.serviceWorker.register("sw.js?v=6");
+            navigator.serviceWorker.register("sw.js?v=7");
         }).catch(() => { });
     }
 })();
