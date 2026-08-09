@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -110,6 +111,15 @@ func initConfig() {
 	homeDir, _ = os.UserHomeDir()
 
 	tempDevice = os.Getenv("TEMP_DEVICE")
+
+	// The single dashboard password. Empty leaves the API wide open, so it is
+	// worth saying out loud rather than failing quietly — but not worth
+	// refusing to start over, which would lock the operator out of a machine
+	// they may only reach through this very dashboard.
+	dashboardPassword = os.Getenv("DASHBOARD_PASSWORD")
+	if dashboardPassword == "" {
+		fmt.Println("⚠️  DASHBOARD_PASSWORD kosong — API jalan tanpa login, siapa pun di LAN bisa akses")
+	}
 
 	// Where check state changes are announced. Empty disables notifications.
 	notifyURL = os.Getenv("NOTIFY_WEBHOOK")

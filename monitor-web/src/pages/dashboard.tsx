@@ -16,7 +16,7 @@ import { usePoll } from "@/hooks/use-poll"
 import { api } from "@/lib/api"
 import { formatClock } from "@/lib/format"
 
-export function Dashboard() {
+export function Dashboard({ onLogout }: { onLogout?: () => void }) {
   // The datacenter overview is the landing screen, the way Proxmox opens on
   // its own Datacenter node rather than on a particular guest.
   const [datacenterOpen, setDatacenterOpen] = useState(true)
@@ -58,6 +58,7 @@ export function Dashboard() {
         datacenterOpen={datacenterOpen}
         onDatacenter={() => setDatacenterOpen(true)}
         onAddDevice={() => setAddOpen(true)}
+        onLogout={onLogout}
         clock={updatedAt ? `Last update: ${formatClock(updatedAt)}` : "Last update: —"}
       >
         {/* Keyed on the selection so navigating away from a crashed view

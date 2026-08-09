@@ -364,6 +364,14 @@ export interface CheckCreate {
   enabled?: boolean
 }
 
+/** auth.go — apakah gerbang password nyala, dan apakah browser ini udah lewat.
+ *  `authenticated` ikut true kalau `required` false, biar pemanggilnya cukup
+ *  ngecek satu field buat mutusin nampilin dashboard atau halaman login. */
+export interface AuthStatus {
+  required: boolean
+  authenticated: boolean
+}
+
 /** notify.go — status webhook notifikasi. URL-nya sendiri nggak pernah
  *  dikirim ke klien; itu kredensial. */
 export interface NotifyStatus {

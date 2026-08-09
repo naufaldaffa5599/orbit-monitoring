@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Menu, Plus } from "lucide-react"
+import { LogOut, Menu, Plus } from "lucide-react"
 import { ShaderBackground } from "@/components/ui/ethereal-whispers"
 import { OrbitMark } from "@/components/shell/orbit-mark"
 import { ResourceTree, type Selection } from "@/components/shell/resource-tree"
@@ -16,6 +16,7 @@ export function AppShell({
   datacenterOpen,
   onDatacenter,
   onAddDevice,
+  onLogout,
   clock,
   children,
 }: {
@@ -25,6 +26,8 @@ export function AppShell({
   datacenterOpen: boolean
   onDatacenter: () => void
   onAddDevice: () => void
+  /** Absent when no password is configured — nothing to sign out of. */
+  onLogout?: () => void
   clock: string
   children: ReactNode
 }) {
@@ -80,6 +83,18 @@ export function AppShell({
               <span className="size-1.5 animate-pulse rounded-full bg-ok shadow-[0_0_8px_var(--ok)]" />
               LIVE
             </div>
+
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                aria-label="Keluar"
+                title="Keluar"
+                className="flex size-8.5 items-center justify-center rounded-md border bg-white/5 text-muted-foreground hover:text-foreground"
+              >
+                <LogOut className="size-4" />
+              </button>
+            )}
           </div>
         </header>
 

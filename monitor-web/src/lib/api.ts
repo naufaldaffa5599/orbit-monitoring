@@ -1,5 +1,6 @@
 import type {
   ApiErrorBody,
+  AuthStatus,
   CheckCreate,
   ChecksResponse,
   CheckState,
@@ -44,11 +45,28 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Called when the API says a session is gone, so the app can drop back to the
+ * login screen instead of every poll failing silently behind a dashboard that
+ * still looks alive.
+ */
+let onUnauthorized: (() => void) | null = null
+
+export function setUnauthorizedHandler(fn: (() => void) | null) {
+  onUnauthorized = fn
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     ...init,
     headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
   })
+  if (res.status === 401 && !path.startsWith("/api/auth/")) {
+    // The auth routes are excluded on purpose: a wrong password is also a 401,
+    // and treating it as an expired session would bounce the user off the very
+    // form they are trying to use.
+    onUnauthorized?.()
+  }
   if (!res.ok) {
     // A failure body is not guaranteed to be JSON (a proxy 502, say), so the
     // status line is the fallback message.
@@ -59,6 +77,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  // ── Auth ──────────────────────────────────────────────────────────────
+  authMe: () => request<AuthStatus>("/api/auth/me"),
+  login: (password: string, remember: boolean) =>
+    request<{ ok: boolean }>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ password, remember }),
+    }),
+  logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
+
   system: () => request<SystemStats>("/api/system"),
   history: () => request<SystemHistory>("/api/system/history"),
 

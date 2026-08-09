@@ -201,6 +201,79 @@ body {
     }
 }
 
+/* ── Login screen ────────────────────────────────────────────────────────────
+   A grid that draws itself in, then a card that rises into it. Kept here
+   rather than in the component for the same reason .shader-scrim is: this file
+   is where the app's motion lives, and the reduced-motion block below has to
+   be able to reach it.
+
+   The animations are all `forwards` off an initial hidden state, so when that
+   block collapses their duration to 0.01ms the elements snap to their final
+   frame — after their stagger delay, which it leaves alone — rather than
+   staying invisible forever. */
+.login-lines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.login-lines .hline,
+.login-lines .vline {
+    position: absolute;
+    background: var(--border);
+    will-change: transform, opacity;
+}
+
+.login-lines .hline {
+    left: 0;
+    right: 0;
+    height: 1px;
+    transform: scaleX(0);
+    animation: login-draw-x 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.login-lines .vline {
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    transform: scaleY(0);
+    transform-origin: 50% 0%;
+    animation: login-draw-y 0.9s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+
+.login-lines .hline:nth-child(1) { top: 18%; animation-delay: 0.12s; }
+.login-lines .hline:nth-child(2) { top: 50%; animation-delay: 0.22s; }
+.login-lines .hline:nth-child(3) { top: 82%; animation-delay: 0.32s; }
+.login-lines .vline:nth-child(4) { left: 22%; animation-delay: 0.42s; }
+.login-lines .vline:nth-child(5) { left: 50%; animation-delay: 0.54s; }
+.login-lines .vline:nth-child(6) { left: 78%; animation-delay: 0.66s; }
+
+@keyframes login-draw-x {
+    0% { transform: scaleX(0); opacity: 0; }
+    60% { opacity: 0.95; }
+    100% { transform: scaleX(1); opacity: 0.7; }
+}
+
+@keyframes login-draw-y {
+    0% { transform: scaleY(0); opacity: 0; }
+    60% { opacity: 0.95; }
+    100% { transform: scaleY(1); opacity: 0.7; }
+}
+
+.login-card {
+    opacity: 0;
+    transform: translateY(20px);
+    animation: login-rise 0.8s cubic-bezier(0.22, 0.61, 0.36, 1) 0.4s forwards;
+}
+
+@keyframes login-rise {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
 /* Respect the OS "reduce motion" setting: the shader is hidden above, and
    everything else drops to an instant transition rather than animating. */
 @media (prefers-reduced-motion: reduce) {

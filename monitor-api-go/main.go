@@ -29,7 +29,12 @@ func withCORS(next http.Handler) http.Handler {
 func routes() http.Handler {
 	mux := http.NewServeMux()
 
-	// System metrics (public — no auth required)
+	// Auth. These three are the only /api routes reachable without a session.
+	mux.Handle("POST /api/auth/login", handler(handleLogin))
+	mux.Handle("POST /api/auth/logout", handler(handleLogout))
+	mux.Handle("GET /api/auth/me", handler(handleAuthMe))
+
+	// System metrics
 	mux.Handle("GET /api/system", handler(handleSystem))
 	mux.Handle("GET /api/system/history", handler(handleSystemHistory))
 	mux.Handle("GET /api/processes", handler(handleProcesses))
@@ -92,7 +97,9 @@ func routes() http.Handler {
 	})
 	mux.HandleFunc("/", handleIndex)
 
-	return withCORS(mux)
+	// Auth sits inside CORS so that a preflight is still answered without a
+	// session — a browser sends OPTIONS before it has any chance to log in.
+	return withCORS(requireAuth(mux))
 }
 
 func main() {
