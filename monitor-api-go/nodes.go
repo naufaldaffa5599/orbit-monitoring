@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -373,6 +375,10 @@ func buildTree() []Node {
 		byHost[key] = append(byHost[key], d)
 	}
 
+	// The entry each machine node is probed through, filled in below and
+	// resolved in one batch afterwards.
+	primaries := map[string]*Device{}
+
 	for _, key := range order {
 		group := byHost[key]
 		node := Node{
@@ -408,7 +414,22 @@ func buildTree() []Node {
 		node.CanServices = hasSSH
 		node.CanTasks = hasSSH && strings.EqualFold(primary.OS, "windows")
 		applyOverride(&node)
+		primaries[node.ID] = primary
 		nodes = append(nodes, node)
+	}
+
+	// Machines have no hypervisor to ask, so their status comes from a probe.
+	// Guests keep the hypervisor's answer, which is authoritative: a VM can be
+	// "running" while its SSH port is still coming up.
+	if reach := machineStatus(primaries); len(reach) > 0 {
+		for i := range nodes {
+			if nodes[i].Kind != KindMachine {
+				continue
+			}
+			if s := reach[nodes[i].ID]; s != "" {
+				nodes[i].Status = s
+			}
+		}
 	}
 
 	// The 9router usage node hangs off Datacenter beside everything else, last,
@@ -424,6 +445,61 @@ func buildTree() []Node {
 	// after the main loops.
 	annotateChecks(nodes)
 	return nodes
+}
+
+// How long a reachability verdict is reused. Short enough that switching a
+// machine on shows up within a poll or two, long enough that the probe is not
+// what the tree spends its time on.
+const reachTTL = 15 * time.Second
+
+// machineStatus probes hand-added machines and returns "online"/"offline" per
+// node id, or "unknown" for a machine there is no way to check — a
+// Wake-on-LAN-only entry on a host with no ping binary.
+//
+// The whole fleet shares one cache entry and one round of goroutines. That
+// matters because buildTree sits on the path of *every* per-node request: with
+// a probe per call, a laptop that is switched off would add its connect
+// timeout to each of them. Here a machine that is off costs one timeout, once
+// per TTL, in parallel with all the others.
+func machineStatus(primaries map[string]*Device) map[string]string {
+	if len(primaries) == 0 {
+		return nil
+	}
+	ids := make([]string, 0, len(primaries))
+	for id := range primaries {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids) // stable order so the goroutine results line up
+
+	// One fixed key, not one derived from the ids: a device added mid-TTL then
+	// reads as "unknown" for a few seconds rather than stranding a cache entry
+	// per device-list shape.
+	out, _ := cached("\x00machines-reach", reachTTL, func() (map[string]string, error) {
+		verdict := make([]string, len(ids))
+		var wg sync.WaitGroup
+		for i, id := range ids {
+			wg.Add(1)
+			go func(i int, d *Device) {
+				defer wg.Done()
+				switch up := checkDeviceUp(d); {
+				case up == nil:
+					verdict[i] = "unknown"
+				case *up:
+					verdict[i] = "online"
+				default:
+					verdict[i] = "offline"
+				}
+			}(i, primaries[id])
+		}
+		wg.Wait()
+
+		m := make(map[string]string, len(ids))
+		for i, id := range ids {
+			m[id] = verdict[i]
+		}
+		return m, nil
+	})
+	return out
 }
 
 // annotateChecks folds the health-check tally onto each node, so the tree can

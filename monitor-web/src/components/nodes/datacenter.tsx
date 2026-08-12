@@ -7,6 +7,7 @@ import { Gauge } from "@/components/nodes/node-summary"
 import { usePoll } from "@/hooks/use-poll"
 import { api } from "@/lib/api"
 import { DASH, formatBytes, formatUptime, levelFor } from "@/lib/format"
+import { nodeUp, statusLabel } from "@/lib/node-status"
 import { cn } from "@/lib/utils"
 import type { DatacenterRow, TreeNode } from "@/types"
 
@@ -23,12 +24,9 @@ function Tile({ label, value, sub }: { label: string; value: string; sub?: strin
 }
 
 function statusTone(node: TreeNode) {
-  if (node.kind === "vm") {
-    return node.status === "running"
-      ? "border-ok/35 bg-ok/12 text-ok"
-      : "bg-white/5 text-muted-foreground"
-  }
-  return "bg-white/5 text-muted-foreground"
+  return nodeUp(node)
+    ? "border-ok/35 bg-ok/12 text-ok"
+    : "bg-white/5 text-muted-foreground"
 }
 
 function GuestRow({
@@ -103,7 +101,9 @@ function GuestRow({
             ? node.status
             : node.kind === "router9"
               ? "API usage"
-              : "belum ada kredensial"}
+              : nodeUp(node) === false
+                ? "offline"
+                : "belum ada kredensial"}
         </span>
       )}
 
@@ -111,7 +111,7 @@ function GuestRow({
         variant="outline"
         className={cn("shrink-0 text-[0.6rem] uppercase", statusTone(node))}
       >
-        {node.kind === "vm" ? node.status : node.kind}
+        {statusLabel(node)}
       </Badge>
     </button>
   )
@@ -134,9 +134,9 @@ export function DatacenterView({
   const host = rows.find((r) => r.node.kind === "hypervisor")
   const guests = rows.filter((r) => r.node.kind !== "hypervisor")
 
-  const running = guests.filter(
-    (r) => r.node.kind !== "vm" || r.node.status === "running",
-  ).length
+  // Only a node known to be down is excluded. A machine with nothing to probe
+  // reads as unknown, and unknown is not evidence that it is off.
+  const running = guests.filter((r) => nodeUp(r.node) !== false).length
   // Only machines that actually answered contribute to the totals; a node that
   // is off would otherwise drag the fleet's memory figure toward zero.
   const answered = rows.filter((r) => r.summary.mem_total > 0)

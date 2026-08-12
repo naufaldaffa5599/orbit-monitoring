@@ -187,7 +187,12 @@ export interface TreeNode {
   host?: string
   device_id?: string
   vmid?: number
-  /** "running" | "stopped" for guests; "unknown" for machines until probed. */
+  /**
+   * "running" | "stopped" for guests, straight from the hypervisor;
+   * "online" | "offline" for machines, from a TCP probe; "unknown" when a
+   * machine offers nothing to probe. Read it through `nodeUp` rather than
+   * comparing here — the vocabularies differ per kind.
+   */
   status: string
   can_shell: boolean
   can_services: boolean

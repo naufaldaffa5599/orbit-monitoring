@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"sync"
 	"testing"
 	"time"
@@ -383,4 +384,52 @@ func TestWebhookSignature(t *testing.T) {
 	if moved == want {
 		t.Error("signature ignores the timestamp — replay protection is not wired up")
 	}
+}
+
+// machineStatus is what turns the grey dot in the tree green, so it is worth a
+// test against real sockets rather than a stub: an open port, a closed one, and
+// an entry there is no way to probe at all.
+func TestMachineStatus(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	openPort := ln.Addr().(*net.TCPAddr).Port
+
+	// A port that was bound and released: nothing answers, and on Linux the
+	// connect is refused immediately rather than hanging to the timeout.
+	spare, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	closedPort := spare.Addr().(*net.TCPAddr).Port
+	spare.Close()
+
+	creds := &sshAuth{Type: "password", Value: "x"}
+	primaries := map[string]*Device{
+		"up":   {ID: "up", Host: "127.0.0.1", Port: openPort, Username: "u", Protocol: "ssh", Auth: creds},
+		"down": {ID: "down", Host: "127.0.0.1", Port: closedPort, Username: "u", Protocol: "ssh", Auth: creds},
+		// No credentials and no host to ping: unknowable, and saying "offline"
+		// would be a guess dressed up as a reading.
+		"dark": {ID: "dark", Protocol: "wol", MACAddress: "aabbccddeeff"},
+	}
+
+	invalidate("\x00machines-reach")
+	got := machineStatus(primaries)
+
+	want := map[string]string{"up": "online", "down": "offline", "dark": "unknown"}
+	for id, w := range want {
+		if got[id] != w {
+			t.Errorf("%s: got %q, want %q", id, got[id], w)
+		}
+	}
+
+	// The verdict is cached: a machine that went down between polls must not
+	// cost every request in the next 15 seconds a fresh connect.
+	ln.Close()
+	if again := machineStatus(primaries); again["up"] != "online" {
+		t.Errorf("cached verdict lost: got %q, want %q", again["up"], "online")
+	}
+	invalidate("\x00machines-reach")
 }

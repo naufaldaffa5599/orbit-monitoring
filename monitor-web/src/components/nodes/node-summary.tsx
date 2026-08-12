@@ -15,6 +15,7 @@ import {
   levelFor,
   type Level,
 } from "@/lib/format"
+import { nodeUp } from "@/lib/node-status"
 import { cn } from "@/lib/utils"
 import type { NodeSummary, TreeNode } from "@/types"
 
@@ -108,6 +109,28 @@ export function NodeSummaryView({
     : undefined
   const level = levelFor(worst)
   const health = { ok: "Healthy", warn: "Under load", crit: "Critical" }[level]
+
+  // A machine that did not answer its probe reports zeros for everything, and
+  // zero CPU on zero cores reads as "Healthy" — the one thing it is not. Say
+  // it is off, the same way a stopped guest does.
+  if (nodeUp(node) === false) {
+    return (
+      <>
+        <NodeHeader node={node} onChanged={onNodesChanged} onDeleted={onDeleted} />
+        <Panel>
+          <PanelHead title="Status">
+            <Badge variant="outline">offline</Badge>
+          </PanelHead>
+          <PanelMessage>
+            {node.label} nggak nyaut di {node.host || "alamatnya"}.{" "}
+            {node.can_wake
+              ? "Coba Wake Up di atas buat nyalain."
+              : "Nyalain dulu buat lihat metriknya."}
+          </PanelMessage>
+        </Panel>
+      </>
+    )
+  }
 
   if (node.kind === "vm" && node.status !== "running") {
     return (

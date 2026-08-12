@@ -11,6 +11,7 @@ import {
   SquareTerminal,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { nodeUp } from "@/lib/node-status"
 import type { TreeNode } from "@/types"
 
 /** Which page of a node is open. All of them render inline, Shell included. */
@@ -39,11 +40,9 @@ const VIEW_META: Record<NodeView, { label: string; icon: typeof Activity }> = {
 }
 
 function statusDot(node: TreeNode) {
-  if (node.kind === "vm") {
-    return node.status === "running" ? "bg-ok" : "bg-muted-foreground"
-  }
-  if (node.kind === "hypervisor" || node.kind === "router9") return "bg-ok"
-  return "bg-muted-foreground/50"
+  const up = nodeUp(node)
+  if (up === null) return "bg-muted-foreground/40" // no way to tell
+  return up ? "bg-ok" : "bg-muted-foreground"
 }
 
 /**
