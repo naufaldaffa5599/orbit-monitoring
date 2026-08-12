@@ -22,6 +22,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { usePoll } from "@/hooks/use-poll"
 import { api } from "@/lib/api"
 import { formatClock } from "@/lib/format"
+import { ROOT_LABEL } from "@/lib/labels"
 
 export function Dashboard({ onLogout }: { onLogout?: () => void }) {
   // The datacenter overview is the landing screen, the way Proxmox opens on
@@ -86,8 +87,8 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
                   // A group has one page, so naming it in the trail would only
                   // repeat the heading back at you.
                   selected.kind === "group"
-                    ? ["Datacenter", selected.label]
-                    : ["Datacenter", selected.label, VIEW_META[view].label]
+                    ? [ROOT_LABEL, selected.label]
+                    : [ROOT_LABEL, selected.label, VIEW_META[view].label]
                 }
               />
               <NodeActions
@@ -111,7 +112,7 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
             clears the error rather than pinning it to every node after. */}
         <ErrorBoundary
           key={datacenterOpen ? "datacenter" : `${selection.nodeId}:${view}`}
-          label={datacenterOpen ? "Datacenter" : selected?.label}
+          label={datacenterOpen ? ROOT_LABEL : selected?.label}
         >
         {datacenterOpen ? (
           <DatacenterView onOpenNode={openNode} />

@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight, HardDrive, Server } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ROOT_LABEL } from "@/lib/labels"
 import { nodeUp } from "@/lib/node-status"
 import type { TreeNode } from "@/types"
 
@@ -22,7 +23,7 @@ function statusDot(node: TreeNode) {
 /**
  * The Server View tree.
  *
- *   Datacenter
+ *   Station
  *   ├── PVE                  ← the hypervisor, with its guests inside it
  *   │   ├── NAS
  *   │   └── PROJECT
@@ -170,11 +171,11 @@ export function ResourceTree({
             )}
           >
             <HardDrive className="size-3.5 shrink-0" />
-            <span>Datacenter</span>
+            <span>{ROOT_LABEL}</span>
           </button>
         </div>
 
-        {/* Everything hangs off Datacenter with the same step every other level
+        {/* Everything hangs off the root with the same step every other level
             uses, so the whole tree reads as one column of icons. */}
         <div className={cn("flex flex-col gap-0.5 border-l pl-2", INDENT)}>
           {roots.map((node) => renderNode(node))}

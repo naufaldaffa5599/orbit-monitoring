@@ -7,6 +7,7 @@ import { Gauge } from "@/components/nodes/node-summary"
 import { usePoll } from "@/hooks/use-poll"
 import { api } from "@/lib/api"
 import { DASH, formatBytes, formatUptime, levelFor } from "@/lib/format"
+import { ROOT_LABEL } from "@/lib/labels"
 import { nodeUp, statusLabel } from "@/lib/node-status"
 import { cn } from "@/lib/utils"
 import type { DatacenterRow, TreeNode } from "@/types"
@@ -146,10 +147,10 @@ export function DatacenterView({
 
   return (
     <>
-      <Crumbs trail={["Datacenter"]} />
+      <Crumbs trail={[ROOT_LABEL]} />
 
       <Panel>
-        <PanelHead title="Datacenter">
+        <PanelHead title={ROOT_LABEL}>
           <Badge variant="outline">
             {running}/{guests.length} node aktif
           </Badge>
@@ -217,7 +218,7 @@ export function DatacenterView({
           {loading && !data ? (
             <RowSkeleton />
           ) : error ? (
-            <PanelMessage>Gagal ambil ringkasan datacenter — {error}</PanelMessage>
+            <PanelMessage>Gagal ambil ringkasan {ROOT_LABEL} — {error}</PanelMessage>
           ) : (
             guests.map((row) => (
               <GuestRow key={row.node.id} row={row} onOpen={onOpenNode} />
