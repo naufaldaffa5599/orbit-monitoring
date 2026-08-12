@@ -35,7 +35,18 @@ const (
 	// A 9router usage node: not a machine at all, just a view over the API
 	// router's request log. Lives at the bottom of the tree.
 	KindRouter9 NodeKind = "router9"
+	// A heading, not a machine: the branch the hand-added boxes hang off.
+	// Carries no host, no credentials and no pages of its own.
+	KindGroup NodeKind = "group"
 )
+
+// outpostsID is the synthetic node the hand-added machines hang off.
+//
+// They need a branch of their own: they are not the hypervisor's guests, but
+// left parentless they sat at the same level as the hypervisor itself, and a
+// growing list of them buried it. "Outposts" because that is what they are —
+// boxes running on their own out beyond the main server, not inside it.
+const outpostsID = "outposts"
 
 type Node struct {
 	ID     string   `json:"id"`
@@ -379,13 +390,14 @@ func buildTree() []Node {
 	// resolved in one batch afterwards.
 	primaries := map[string]*Device{}
 
+	// Collected first and appended together, because the Outposts heading only
+	// exists if there is something to put under it.
+	var machines []Node
+
 	for _, key := range order {
 		group := byHost[key]
-		// No parent: a machine added by hand sits beside the hypervisor under
-		// Datacenter, not inside it. Only guests are its children, and the
-		// tree's collapse should mean "hide this hypervisor's VMs".
 		node := Node{
-			Kind: KindMachine, Status: "unknown",
+			Kind: KindMachine, Parent: outpostsID, Status: "unknown",
 			Host: group[0].Host, IsLocal: isLocalHost(group[0].Host),
 		}
 		// The primary entry is whichever can actually open a shell; it also
@@ -418,7 +430,14 @@ func buildTree() []Node {
 		node.CanTasks = hasSSH && strings.EqualFold(primary.OS, "windows")
 		applyOverride(&node)
 		primaries[node.ID] = primary
-		nodes = append(nodes, node)
+		machines = append(machines, node)
+	}
+
+	if len(machines) > 0 {
+		nodes = append(nodes, Node{
+			ID: outpostsID, Label: "Outposts", Kind: KindGroup, Icon: "📡",
+		})
+		nodes = append(nodes, machines...)
 	}
 
 	// Machines have no hypervisor to ask, so their status comes from a probe.

@@ -27,6 +27,10 @@ func resolveNode(r *http.Request, needCreds bool) (*Node, *Device, error) {
 	if node == nil {
 		return nil, nil, errf(404, "node tidak ditemukan")
 	}
+	// A heading is not a machine; nothing here can be collected from it.
+	if node.Kind == KindGroup {
+		return nil, nil, errf(400, "node ini cuma judul grup, bukan mesin")
+	}
 	if needCreds && dev == nil {
 		return nil, nil, errf(409, "node ini belum punya kredensial SSH — tambahkan lewat + Add device")
 	}
@@ -169,7 +173,13 @@ func handleNodeKillProcess(w http.ResponseWriter, r *http.Request) error {
 // a stopped VM or a laptop that is switched off would otherwise add its
 // connect timeout to the page load, one after another.
 func handleDatacenter(w http.ResponseWriter, r *http.Request) error {
-	nodes := buildTree()
+	// Headings belong to the tree, not to a list of machines and their load.
+	nodes := []Node{}
+	for _, n := range buildTree() {
+		if n.Kind != KindGroup {
+			nodes = append(nodes, n)
+		}
+	}
 
 	type row struct {
 		Node    Node        `json:"node"`

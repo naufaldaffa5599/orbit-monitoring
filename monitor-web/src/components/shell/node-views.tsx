@@ -24,6 +24,7 @@ export const VIEW_META: Record<NodeView, { label: string; icon: typeof Activity 
  * Checks need no credentials, so Apps is always there.
  */
 export function viewsFor(node: TreeNode): NodeView[] {
+  if (node.kind === "group") return [] // a heading has no pages
   const views: NodeView[] = []
   if (
     node.can_services ||

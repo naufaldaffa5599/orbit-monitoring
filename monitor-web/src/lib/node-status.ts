@@ -13,6 +13,7 @@ import type { TreeNode } from "@/types"
  * dashboard shows it as its own shade rather than claiming the machine is down.
  */
 export function nodeUp(node: TreeNode): boolean | null {
+  if (node.kind === "group") return null // a heading, not a machine
   if (node.kind === "hypervisor" || node.kind === "router9") return true
   if (node.status === "unknown" || !node.status) return null
   return node.status === "running" || node.status === "online"

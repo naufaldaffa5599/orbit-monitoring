@@ -175,7 +175,8 @@ export interface ApiErrorBody {
  * actually be opened.
  */
 
-export type NodeKind = "hypervisor" | "vm" | "machine" | "router9"
+/** "group" is a heading in the tree — Outposts — not a machine. */
+export type NodeKind = "hypervisor" | "vm" | "machine" | "router9" | "group"
 
 export interface TreeNode {
   id: string

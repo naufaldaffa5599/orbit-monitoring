@@ -23,11 +23,13 @@ function statusDot(node: TreeNode) {
  * The Server View tree.
  *
  *   Datacenter
- *   ├── PVE
+ *   ├── PVE                  ← the hypervisor, with its guests inside it
  *   │   ├── NAS
  *   │   └── PROJECT
- *   ├── Laptop Server
- *   └── …
+ *   ├── OUTPOSTS             ← a heading, not a machine
+ *   │   ├── Laptop Server
+ *   │   └── …
+ *   └── 9router
  *
  * Machines only. Each node's own pages (Summary, Services, Shell…) are tabs
  * over the content instead — see NodeTabs. They used to hang here as child
@@ -58,10 +60,16 @@ export function ResourceTree({
   const renderNode = (node: TreeNode) => {
     const kids = childrenOf(node.id)
     const isSelected = selectedId === node.id && !datacenterOpen
-    // The hypervisor is the spine of the tree, and the node you are looking at
-    // should show where you are; an explicit collapse still wins over both.
+    // A heading has no page behind it: clicking it can only mean "open me".
+    const isHeading = node.kind === "group"
+    // The hypervisor and the headings are the spine of the tree, and the node
+    // you are looking at should show where you are; an explicit collapse still
+    // wins over all three.
     const isOpen =
-      expanded[node.id] ?? (node.kind === "hypervisor" || isSelected)
+      expanded[node.id] ??
+      (node.kind === "hypervisor" || isHeading || isSelected)
+    const toggle = () =>
+      setExpanded((prev) => ({ ...prev, [node.id]: !isOpen }))
 
     return (
       <div key={node.id}>
@@ -69,7 +77,7 @@ export function ResourceTree({
           {kids.length > 0 ? (
             <button
               type="button"
-              onClick={() => setExpanded((prev) => ({ ...prev, [node.id]: !isOpen }))}
+              onClick={toggle}
               aria-label={isOpen ? "Collapse" : "Expand"}
               aria-expanded={isOpen}
               className="flex size-4 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground"
@@ -86,12 +94,14 @@ export function ResourceTree({
 
           <button
             type="button"
-            onClick={() => onSelect(node.id)}
+            onClick={isHeading ? toggle : () => onSelect(node.id)}
             className={cn(
               "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left text-sm transition-colors",
-              isSelected
-                ? "bg-primary/15 text-[#ffb469] shadow-[inset_2px_0_0_var(--primary)]"
-                : "text-sidebar-foreground hover:bg-white/5 hover:text-foreground",
+              isHeading
+                ? "text-[0.72rem] font-semibold tracking-[0.04em] text-secondary-foreground uppercase hover:text-foreground"
+                : isSelected
+                  ? "bg-primary/15 text-[#ffb469] shadow-[inset_2px_0_0_var(--primary)]"
+                  : "text-sidebar-foreground hover:bg-white/5 hover:text-foreground",
             )}
           >
             {node.kind === "hypervisor" ? (
@@ -113,14 +123,17 @@ export function ResourceTree({
                 {node.checks_failing}
               </span>
             )}
-            <span
-              className={cn(
-                "shrink-0 rounded-full",
-                node.checks_failing > 0 ? "size-1.5" : "ml-auto size-1.5",
-                statusDot(node),
-              )}
-              title={node.status}
-            />
+            {/* A heading has no status of its own; the machines under it do. */}
+            {!isHeading && (
+              <span
+                className={cn(
+                  "shrink-0 rounded-full",
+                  node.checks_failing > 0 ? "size-1.5" : "ml-auto size-1.5",
+                  statusDot(node),
+                )}
+                title={node.status}
+              />
+            )}
           </button>
         </div>
 
