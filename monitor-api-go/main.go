@@ -99,7 +99,9 @@ func routes() http.Handler {
 
 	// Auth sits inside CORS so that a preflight is still answered without a
 	// session — a browser sends OPTIONS before it has any chance to log in.
-	return withCORS(requireAuth(mux))
+	// withActivity is outermost so the warm loop counts a request whether or
+	// not it turns out to be authorised; either way somebody is out there.
+	return withActivity(withCORS(requireAuth(mux)))
 }
 
 func main() {
@@ -112,6 +114,7 @@ func main() {
 
 	go collectMetrics()
 	go pollChecks()
+	go warmSummaries()
 	go adbStartServer()
 	if tempDevice != "" {
 		go pollRemoteTemps()

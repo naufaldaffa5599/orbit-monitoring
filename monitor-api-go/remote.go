@@ -30,6 +30,14 @@ const (
 	remoteCmdTimeout = 12 * time.Second
 	// After a failed connect, don't retry on every single request.
 	remoteBackoff = 20 * time.Second
+	// How many multiples of the TTL a snapshot may still be served for while
+	// its refresh runs. Past that the caller waits for a real one.
+	//
+	// Serving stale is meant to hide a refresh, not to pass an old reading off
+	// as the current one. While the dashboard is open the warm loop keeps every
+	// snapshot well inside one TTL, so this only ever bites on the first click
+	// after a long spell away — where waiting a second is the honest answer.
+	staleGrace = 5
 )
 
 // ── Connection pool ─────────────────────────────────────────────────────────
@@ -146,11 +154,15 @@ func psCommand(script string) string {
 // ── Snapshot cache ──────────────────────────────────────────────────────────
 
 type cacheEntry struct {
-	mu      sync.Mutex // serialises refreshes so N readers cause 1 command
-	value   any
-	at      time.Time
-	err     string
-	loading bool
+	mu    sync.Mutex // guards the fields below; held for reads and writes only
+	fetch sync.Mutex // serialises collects, so N callers cause 1 command
+
+	value any
+	at    time.Time
+	err   string
+	// refreshing marks a background refresh already on its way, so a burst of
+	// readers arriving at an expired entry spawns one goroutine, not one each.
+	refreshing bool
 }
 
 var remoteCache = struct {
@@ -169,24 +181,79 @@ func entryFor(key string) *cacheEntry {
 	return e
 }
 
-// cached returns a snapshot no older than ttl, calling collect only when the
-// cached copy has expired. Concurrent callers for the same key share one call.
+// cached returns the snapshot for key, refreshing it once it has aged past ttl.
+//
+// Stale-while-revalidate: an expired snapshot is handed back immediately and
+// the refresh runs behind the caller. Only a caller that finds nothing cached —
+// or something older than staleGrace allows — waits, and then it shares the
+// collect with everyone else who arrives meanwhile.
+//
+// Blocking the reader on the refresh — which is what this used to do — made
+// every expiry visible as a stall on whichever request happened to land on it,
+// and collecting is slow by construction: the Linux summary samples /proc/stat
+// twice a second apart, and buildTree asks the hypervisor for its guest list
+// over two SSH round trips. Since buildTree runs on every per-node request,
+// clicking through the tree kept hitting one expiry or another.
 //
 // A failed refresh does NOT discard the previous value: a node that blips for
 // one cycle keeps showing its last known state, with the error attached, which
 // is far more useful than a dashboard that empties itself.
 func cached[T any](key string, ttl time.Duration, collect func() (T, error)) (T, string) {
 	e := entryFor(key)
-	e.mu.Lock()
-	defer e.mu.Unlock()
 
-	if !e.at.IsZero() && time.Since(e.at) < ttl {
-		if v, ok := e.value.(T); ok {
-			return v, e.err
+	e.mu.Lock()
+	value, have := e.value.(T)
+	err := e.err
+	age := time.Since(e.at)
+	fresh := have && !e.at.IsZero() && age < ttl
+	servable := have && !e.at.IsZero() && age < ttl*staleGrace
+	spawn := servable && !fresh && !e.refreshing
+	if spawn {
+		e.refreshing = true
+	}
+	e.mu.Unlock()
+
+	if servable {
+		if spawn {
+			go func() {
+				defer func() {
+					e.mu.Lock()
+					e.refreshing = false
+					e.mu.Unlock()
+				}()
+				e.fetch.Lock()
+				defer e.fetch.Unlock()
+				refresh(e, collect)
+			}()
 		}
+		return value, err
 	}
 
+	// Nothing servable, so this one has to wait. Anybody else arriving mean-
+	// while queues on the same collect rather than starting a second one, and
+	// takes the snapshot it stored.
+	e.fetch.Lock()
+	defer e.fetch.Unlock()
+
+	e.mu.Lock()
+	v, ok := e.value.(T)
+	filled := ok && !e.at.IsZero() && time.Since(e.at) < ttl
+	err = e.err
+	e.mu.Unlock()
+	if filled {
+		return v, err
+	}
+
+	return refresh(e, collect)
+}
+
+// refresh runs collect and folds the outcome into the entry. Callers hold
+// e.fetch, so only one collect per key is ever in flight.
+func refresh[T any](e *cacheEntry, collect func() (T, error)) (T, string) {
 	value, err := collect()
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	if err != nil {
 		e.err = err.Error()
 		if v, ok := e.value.(T); ok {
@@ -195,9 +262,7 @@ func cached[T any](key string, ttl time.Duration, collect func() (T, error)) (T,
 		var zero T
 		return zero, e.err
 	}
-	e.value = value
-	e.err = ""
-	e.at = time.Now()
+	e.value, e.err, e.at = value, "", time.Now()
 	return value, ""
 }
 

@@ -191,11 +191,7 @@ func handleDatacenter(w http.ResponseWriter, r *http.Request) error {
 	var wg sync.WaitGroup
 	for i, n := range nodes {
 		rows[i] = row{Node: n}
-		// Only ask nodes that can answer: a stopped VM, an Android entry, or a
-		// machine with no credentials would each contribute a timeout and an
-		// error string to a view that is meant to be a glance.
-		collectible := (n.DeviceID != "" && n.CanServices) || n.Kind == KindVM
-		if !collectible || (n.Kind == KindVM && n.Status != "running") {
+		if !collectible(&n) {
 			continue
 		}
 		wg.Add(1)
@@ -214,6 +210,19 @@ func handleDatacenter(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// collectible reports whether asking this node for a summary can produce one.
+//
+// A stopped VM, an Android entry, a heading, or a machine with no credentials
+// would each contribute a timeout and an error string instead of a figure. A
+// running guest with no credentials still counts: the hypervisor knows its
+// memory and uptime even when nobody can log in.
+func collectible(n *Node) bool {
+	if n.Kind == KindVM {
+		return n.Status == "running"
+	}
+	return n.DeviceID != "" && n.CanServices
+}
+
 // validUnitName guards the one place a request-supplied string reaches a shell.
 func validUnitName(s string) bool {
 	if s == "" || len(s) > 128 {
@@ -230,10 +239,16 @@ func validUnitName(s string) bool {
 	return true
 }
 
+// invalidate drops a snapshot so the next request collects a fresh one.
+//
+// The value goes, not just its timestamp: cached serves a stale value while it
+// refreshes, and after stopping a service the stale answer is precisely the one
+// nobody wants back. Whoever asks next waits for the truth.
 func invalidate(key string) {
 	e := entryFor(key)
 	e.mu.Lock()
 	e.at = time.Time{}
+	e.value = nil
 	e.mu.Unlock()
 }
 
