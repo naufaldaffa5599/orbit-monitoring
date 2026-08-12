@@ -2,7 +2,6 @@ import { useCallback } from "react"
 import { Cpu, HardDrive, MemoryStick } from "lucide-react"
 import { Panel, PanelBody, PanelHead, PanelMessage } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
-import { UsageChart } from "@/components/system/usage-chart"
 import { usePoll } from "@/hooks/use-poll"
 import { api } from "@/lib/api"
 import {
@@ -86,11 +85,6 @@ export function NodeSummaryView({ node }: { node: TreeNode }) {
     [node.id],
   )
   const { data, error, loading } = usePoll(fetchSummary)
-
-  // History exists only for the host running the API — nothing records a
-  // remote node's past, so the chart is shown where it means something.
-  const fetchHistory = useCallback(() => api.history(), [])
-  const history = usePoll(node.is_local ? fetchHistory : noHistory)
 
   const summary: NodeSummary | undefined = data?.summary
   const stale = data?.error || error
@@ -211,17 +205,6 @@ export function NodeSummaryView({ node }: { node: TreeNode }) {
         </PanelBody>
       </Panel>
 
-      {node.is_local && (
-        <Panel>
-          <PanelHead title="CPU & Memory usage">
-            <span className="text-xs text-muted-foreground">Last hour</span>
-          </PanelHead>
-          <PanelBody>
-            <UsageChart history={history.data} />
-          </PanelBody>
-        </Panel>
-      )}
-
       {loading && !summary && (
         <Panel>
           <PanelMessage>Mengumpulkan data dari {node.label}…</PanelMessage>
@@ -235,6 +218,3 @@ export function NodeSummaryView({ node }: { node: TreeNode }) {
     </>
   )
 }
-
-/** Stand-in for nodes with no history endpoint; never resolves to data. */
-const noHistory = async () => null

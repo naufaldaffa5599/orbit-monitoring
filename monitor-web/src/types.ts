@@ -41,16 +41,6 @@ export interface SystemStats {
   timestamp: string
 }
 
-export interface HistoryPoint {
-  ts: string
-  v: number
-}
-
-export interface SystemHistory {
-  cpu: HistoryPoint[]
-  ram: HistoryPoint[]
-}
-
 /** services.go — systemd states, passed through verbatim from systemctl. */
 export type ServiceState =
   | "active"

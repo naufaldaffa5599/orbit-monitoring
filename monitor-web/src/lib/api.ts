@@ -20,7 +20,6 @@ import type {
   NodeSummaryResponse,
   Router9UsageResponse,
   ServiceAction,
-  SystemHistory,
   SystemStats,
   TreeNode,
 } from "@/types"
@@ -87,7 +86,6 @@ export const api = {
   logout: () => request<{ ok: boolean }>("/api/auth/logout", { method: "POST" }),
 
   system: () => request<SystemStats>("/api/system"),
-  history: () => request<SystemHistory>("/api/system/history"),
 
   processes: (sort: ProcessSort) =>
     request<ProcessesResponse>(`/api/processes?sort=${sort}`),
