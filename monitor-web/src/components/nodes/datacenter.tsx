@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Gauge } from "@/components/nodes/node-summary"
 import { usePoll } from "@/hooks/use-poll"
 import { api } from "@/lib/api"
-import { DASH, formatBytes, formatUptime, levelFor } from "@/lib/format"
+import { DASH, formatBytes, formatStamp, formatUptime, levelFor } from "@/lib/format"
 import { ROOT_LABEL } from "@/lib/labels"
 import { nodeUp, statusLabel } from "@/lib/node-status"
 import { cn } from "@/lib/utils"
@@ -211,7 +211,7 @@ export function DatacenterView({
       <Panel>
         <PanelHead title="Guests & machines">
           <span className="text-xs text-muted-foreground">
-            {data ? `diperbarui ${data.generated_at}` : ""}
+            {data ? `diperbarui ${formatStamp(data.generated_at)}` : ""}
           </span>
         </PanelHead>
         <div className="flex flex-col">
@@ -306,7 +306,7 @@ export function GroupView({
       <Panel>
         <PanelHead title={measurable ? "Mesin di grup ini" : `Isi ${node.label}`}>
           <span className="text-xs text-muted-foreground">
-            {data ? `diperbarui ${data.generated_at}` : ""}
+            {data ? `diperbarui ${formatStamp(data.generated_at)}` : ""}
           </span>
         </PanelHead>
         <div className="flex flex-col">

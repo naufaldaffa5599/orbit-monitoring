@@ -46,6 +46,23 @@ export function formatClock(date = new Date()): string {
   })
 }
 
+/**
+ * The clock for a timestamp the API generated.
+ *
+ * Responses carry a full RFC 3339 string — "2026-08-13T00:05:45.510345+07:00" —
+ * because that is what an API should carry: unambiguous about the offset, and
+ * parseable by anything. It is not what anyone wants to read on a panel header,
+ * so it is narrowed to the time here rather than shortened at the source.
+ *
+ * An unparseable stamp is passed through untouched. Showing whatever the server
+ * actually said beats showing "Invalid Date" and hiding it.
+ */
+export function formatStamp(iso: string | undefined | null): string {
+  if (!iso) return DASH
+  const at = new Date(iso)
+  return Number.isNaN(at.getTime()) ? iso : formatClock(at)
+}
+
 /** Severity band shared by the gauges, the health chip and the process rows. */
 export type Level = "ok" | "warn" | "crit"
 
