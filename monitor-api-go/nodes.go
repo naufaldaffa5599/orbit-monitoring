@@ -434,9 +434,11 @@ func buildTree() []Node {
 	}
 
 	if len(machines) > 0 {
-		nodes = append(nodes, Node{
+		heading := Node{
 			ID: outpostsID, Label: "Outposts", Kind: KindGroup, Icon: "📡",
-		})
+		}
+		applyOverride(&heading) // its name is the only thing it has
+		nodes = append(nodes, heading)
 		nodes = append(nodes, machines...)
 	}
 

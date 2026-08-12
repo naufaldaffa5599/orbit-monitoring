@@ -7,7 +7,7 @@ import {
   type NodeView,
   type Selection,
 } from "@/components/shell/node-views"
-import { DatacenterView } from "@/components/nodes/datacenter"
+import { DatacenterView, GroupView } from "@/components/nodes/datacenter"
 import { NodeActions } from "@/components/nodes/node-actions"
 import { NodeSummaryView } from "@/components/nodes/node-summary"
 import { NodeServicesView } from "@/components/nodes/node-services"
@@ -82,7 +82,13 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
           <>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Crumbs
-                trail={["Datacenter", selected.label, VIEW_META[view].label]}
+                trail={
+                  // A group has one page, so naming it in the trail would only
+                  // repeat the heading back at you.
+                  selected.kind === "group"
+                    ? ["Datacenter", selected.label]
+                    : ["Datacenter", selected.label, VIEW_META[view].label]
+                }
               />
               <NodeActions
                 node={selected}
@@ -113,6 +119,8 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
           <Panel>
             <PanelMessage>Pilih node di sebelah kiri.</PanelMessage>
           </Panel>
+        ) : selected.kind === "group" ? (
+          <GroupView key={selected.id} node={selected} onOpenNode={openNode} />
         ) : view === "services" ? (
           <NodeServicesView key={selected.id} node={selected} />
         ) : view === "tasks" ? (

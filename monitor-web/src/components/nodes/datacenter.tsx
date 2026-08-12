@@ -228,3 +228,99 @@ export function DatacenterView({
     </>
   )
 }
+
+/**
+ * The rollup for a heading in the tree — Outposts and any group after it.
+ *
+ * Deliberately not the same thing as the hypervisor's Summary, which reports
+ * one physical machine whose figures already contain its guests. Nothing runs
+ * "inside" a group: these are separate boxes that share nothing, so every
+ * number here is a sum across them and is labelled as one.
+ *
+ * It reads the datacenter endpoint rather than adding one of its own — that
+ * response already carries a row per node, parent included, and the two views
+ * poll on the same cache.
+ */
+export function GroupView({
+  node,
+  onOpenNode,
+}: {
+  node: TreeNode
+  onOpenNode: (nodeId: string) => void
+}) {
+  const fetchDatacenter = useCallback(() => api.datacenter(), [])
+  const { data, error, loading } = usePoll(fetchDatacenter, 10000)
+
+  const rows = (data?.nodes ?? []).filter((r) => r.node.parent === node.id)
+  const online = rows.filter((r) => nodeUp(r.node) === true).length
+  const offline = rows.filter((r) => nodeUp(r.node) === false).length
+
+  // A machine that is off reports zeros, and counting those would quietly
+  // shrink the group's capacity instead of showing that a member is missing.
+  const answered = rows.filter((r) => r.summary.mem_total > 0)
+  const memTotal = answered.reduce((sum, r) => sum + r.summary.mem_total, 0)
+  const memUsed = answered.reduce((sum, r) => sum + r.summary.mem_used, 0)
+  const cpuCount = answered.reduce((sum, r) => sum + r.summary.cpu_count, 0)
+  const failing = rows.reduce((sum, r) => sum + r.node.checks_failing, 0)
+
+  return (
+    <>
+      <Panel>
+        <PanelHead title={`${node.label} — total`}>
+          <Badge variant="outline">
+            {online}/{rows.length} online
+          </Badge>
+        </PanelHead>
+        <PanelBody className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Tile
+            label="Mesin"
+            value={String(rows.length)}
+            sub={offline > 0 ? `${offline} lagi mati` : "semua nyaut"}
+          />
+          <Tile
+            label="vCPU total"
+            value={String(cpuCount)}
+            sub={`dijumlah dari ${answered.length} mesin`}
+          />
+          <Tile
+            label="RAM terpakai"
+            value={memTotal ? `${Math.round((memUsed / memTotal) * 100)}%` : DASH}
+            sub={`${formatBytes(memUsed)} / ${formatBytes(memTotal)}`}
+          />
+          <Tile
+            label="Check gagal"
+            value={String(failing)}
+            sub={failing > 0 ? "ada app yang down" : "semua check lolos"}
+          />
+        </PanelBody>
+      </Panel>
+
+      <Panel>
+        <PanelHead title="Mesin di grup ini">
+          <span className="text-xs text-muted-foreground">
+            {data ? `diperbarui ${data.generated_at}` : ""}
+          </span>
+        </PanelHead>
+        <div className="flex flex-col">
+          {loading && !data ? (
+            <RowSkeleton />
+          ) : error ? (
+            <PanelMessage>Gagal ambil ringkasan — {error}</PanelMessage>
+          ) : rows.length === 0 ? (
+            <PanelMessage>Belum ada mesin di grup ini.</PanelMessage>
+          ) : (
+            rows.map((row) => (
+              <GuestRow key={row.node.id} row={row} onOpen={onOpenNode} />
+            ))
+          )}
+        </div>
+      </Panel>
+
+      <PanelMessage>
+        Angka di atas dijumlah dari {rows.length} mesin yang berdiri sendiri —
+        beda dari hypervisor, yang angkanya milik satu mesin dan udah termasuk
+        beban VM di dalamnya.
+      </PanelMessage>
+    </>
+  )
+}

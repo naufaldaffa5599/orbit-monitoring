@@ -243,9 +243,12 @@ func invalidate(key string) {
 // entry of its own — exactly the case where the hypervisor's name ("NAS.100")
 // is the least useful one.
 func handleRenameNode(w http.ResponseWriter, r *http.Request) error {
-	node, _, err := resolveNode(r, false)
-	if err != nil {
-		return err
+	// Not resolveNode: that one speaks for the machine endpoints and turns a
+	// group away, but a heading is exactly the kind of thing worth renaming —
+	// its name is the only thing it has.
+	node, _ := nodeByID(r.PathValue("node_id"))
+	if node == nil {
+		return errf(404, "node tidak ditemukan")
 	}
 	var payload struct {
 		Label string `json:"label"`
