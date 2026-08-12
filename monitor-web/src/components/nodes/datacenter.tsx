@@ -264,8 +264,14 @@ export function GroupView({
   const cpuCount = answered.reduce((sum, r) => sum + r.summary.cpu_count, 0)
   const failing = rows.reduce((sum, r) => sum + r.node.checks_failing, 0)
 
+  // Not every group is a group of machines. Relays are views over something
+  // out on the network — no CPU, no RAM — and tiles reading "0 vCPU · RAM —"
+  // would be reporting the absence of figures as if it were a measurement.
+  const measurable = answered.length > 0
+
   return (
     <>
+      {measurable && (
       <Panel>
         <PanelHead title={`${node.label} — total`}>
           <Badge variant="outline">
@@ -295,9 +301,10 @@ export function GroupView({
           />
         </PanelBody>
       </Panel>
+      )}
 
       <Panel>
-        <PanelHead title="Mesin di grup ini">
+        <PanelHead title={measurable ? "Mesin di grup ini" : `Isi ${node.label}`}>
           <span className="text-xs text-muted-foreground">
             {data ? `diperbarui ${data.generated_at}` : ""}
           </span>
@@ -308,7 +315,7 @@ export function GroupView({
           ) : error ? (
             <PanelMessage>Gagal ambil ringkasan — {error}</PanelMessage>
           ) : rows.length === 0 ? (
-            <PanelMessage>Belum ada mesin di grup ini.</PanelMessage>
+            <PanelMessage>Belum ada isinya.</PanelMessage>
           ) : (
             rows.map((row) => (
               <GuestRow key={row.node.id} row={row} onOpen={onOpenNode} />
@@ -317,11 +324,13 @@ export function GroupView({
         </div>
       </Panel>
 
-      <PanelMessage>
-        Angka di atas dijumlah dari {rows.length} mesin yang berdiri sendiri —
-        beda dari hypervisor, yang angkanya milik satu mesin dan udah termasuk
-        beban VM di dalamnya.
-      </PanelMessage>
+      {measurable && (
+        <PanelMessage>
+          Angka di atas dijumlah dari {rows.length} mesin yang berdiri sendiri —
+          beda dari hypervisor, yang angkanya milik satu mesin dan udah termasuk
+          beban VM di dalamnya.
+        </PanelMessage>
+      )}
     </>
   )
 }

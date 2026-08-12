@@ -48,6 +48,11 @@ const (
 // boxes running on their own out beyond the main server, not inside it.
 const outpostsID = "outposts"
 
+// relaysID groups the entries that are not machines at all — a view over some
+// service out there rather than a box with a CPU. Kept apart from Outposts
+// because "nothing to SSH into" is a different thing from "not a guest".
+const relaysID = "relays"
+
 type Node struct {
 	ID     string   `json:"id"`
 	Label  string   `json:"label"`
@@ -456,11 +461,17 @@ func buildTree() []Node {
 		}
 	}
 
-	// The 9router usage node hangs off Datacenter beside everything else, last,
-	// so the tree ends where the API-router view starts.
+	// Services that are not machines at all, last, under a heading of their
+	// own. 9router is the only one so far; the heading is what says where the
+	// next one goes, and keeps it from sitting bare beside the hypervisor.
 	if router9Pass != "" {
+		relays := Node{
+			ID: relaysID, Label: "Relays", Kind: KindGroup, Icon: "🛰️",
+		}
+		applyOverride(&relays)
+		nodes = append(nodes, relays)
 		nodes = append(nodes, Node{
-			ID: "router9", Label: "9router", Kind: KindRouter9,
+			ID: "router9", Label: "9router", Kind: KindRouter9, Parent: relaysID,
 			OS: "router", Icon: "🔀", Host: router9URL, Status: "running",
 		})
 	}
