@@ -1,5 +1,4 @@
 import { useCallback } from "react"
-import { Crumbs } from "@/components/shell/app-shell"
 import { Panel, PanelBody, PanelHead, PanelMessage, RowSkeleton } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -12,7 +11,7 @@ import { api } from "@/lib/api"
 import { DASH } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
-import type { Router9Usage, TreeNode } from "@/types"
+import type { Router9Usage } from "@/types"
 
 function Tile({ label, value, tone }: { label: string; value: string; tone?: "ok" | "warn" }) {
   return (
@@ -103,7 +102,7 @@ function UsageTooltip({
  * The 9router usage page. Not a machine — the node just points at the API
  * router's request log, so this view replaces the CPU/RAM summary entirely.
  */
-export function Router9View({ node }: { node: TreeNode }) {
+export function Router9View() {
   const fetchUsage = useCallback(() => api.router9Usage(), [])
   const { data, error, loading } = usePoll(fetchUsage, 30000)
 
@@ -134,8 +133,6 @@ export function Router9View({ node }: { node: TreeNode }) {
 
   return (
     <>
-      <Crumbs trail={["Datacenter", node.label, "Summary"]} />
-
       <Panel>
         <PanelHead title="Usage 9router">
           <div className="flex items-center gap-2">

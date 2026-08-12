@@ -381,8 +381,11 @@ func buildTree() []Node {
 
 	for _, key := range order {
 		group := byHost[key]
+		// No parent: a machine added by hand sits beside the hypervisor under
+		// Datacenter, not inside it. Only guests are its children, and the
+		// tree's collapse should mean "hide this hypervisor's VMs".
 		node := Node{
-			Kind: KindMachine, Parent: rootID, Status: "unknown",
+			Kind: KindMachine, Status: "unknown",
 			Host: group[0].Host, IsLocal: isLocalHost(group[0].Host),
 		}
 		// The primary entry is whichever can actually open a shell; it also

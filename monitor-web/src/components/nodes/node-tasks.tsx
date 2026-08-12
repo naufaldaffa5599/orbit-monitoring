@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { Search, X } from "lucide-react"
 import { toast } from "sonner"
-import { Crumbs } from "@/components/shell/app-shell"
 import { Panel, PanelHead, PanelMessage, RowSkeleton } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -63,8 +62,6 @@ export function NodeTasksView({ node }: { node: TreeNode }) {
 
   return (
     <>
-      <Crumbs trail={["Datacenter", node.label, "Task Manager"]} />
-
       <Panel>
         <PanelHead title="Processes">
           <div className="flex items-center gap-2">

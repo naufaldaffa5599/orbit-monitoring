@@ -19,6 +19,11 @@ import type { TreeNode } from "@/types"
  *
  * Wake/Restart/Shutdown used to live on the Devices tab. That tab is gone —
  * machines are nodes now — so the buttons moved here, to the node they act on.
+ *
+ * They sit above the view tabs and so appear on every page of a node, which on
+ * a phone is where five labelled buttons would cost two rows on every screen.
+ * Below sm they keep their icons and drop their labels; the title and
+ * aria-label carry the name, and both destructive ones confirm first anyway.
  */
 export function NodeActions({
   node,
@@ -106,10 +111,12 @@ export function NodeActions({
             variant="outline"
             disabled={busy}
             onClick={wake}
+            title="Wake Up"
+            aria-label="Wake Up"
             className="hover:border-ok/40 hover:bg-ok/12 hover:text-ok"
           >
             <Zap className="size-3.5" />
-            Wake Up
+            <span className="max-sm:hidden">Wake Up</span>
           </Button>
         )}
         {node.can_power && (
@@ -119,26 +126,36 @@ export function NodeActions({
               variant="outline"
               disabled={busy}
               onClick={() => power("restart")}
+              title="Restart"
+              aria-label="Restart"
               className="hover:border-warn/40 hover:bg-warn/12 hover:text-warn"
             >
               <RotateCw className="size-3.5" />
-              Restart
+              <span className="max-sm:hidden">Restart</span>
             </Button>
             <Button
               size="sm"
               variant="outline"
               disabled={busy}
               onClick={() => power("shutdown")}
+              title="Shutdown"
+              aria-label="Shutdown"
               className="hover:border-destructive/40 hover:bg-destructive/12 hover:text-destructive"
             >
               <Power className="size-3.5" />
-              Shutdown
+              <span className="max-sm:hidden">Shutdown</span>
             </Button>
           </>
         )}
-        <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setRenameOpen(true)}
+          title="Rename"
+          aria-label="Rename"
+        >
           <Pencil className="size-3.5" />
-          Rename
+          <span className="max-sm:hidden">Rename</span>
         </Button>
         {hasDevices && (
           <Button
@@ -146,10 +163,12 @@ export function NodeActions({
             variant="outline"
             disabled={busy}
             onClick={remove}
+            title="Hapus"
+            aria-label="Hapus"
             className="hover:border-destructive/40 hover:bg-destructive/12 hover:text-destructive"
           >
             <Trash2 className="size-3.5" />
-            Hapus
+            <span className="max-sm:hidden">Hapus</span>
           </Button>
         )}
       </div>

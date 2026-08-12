@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from "react"
-import { AppShell } from "@/components/shell/app-shell"
-import type { Selection } from "@/components/shell/resource-tree"
+import { AppShell, Crumbs } from "@/components/shell/app-shell"
+import {
+  NodeTabs,
+  VIEW_META,
+  viewsFor,
+  type NodeView,
+  type Selection,
+} from "@/components/shell/node-views"
 import { DatacenterView } from "@/components/nodes/datacenter"
+import { NodeActions } from "@/components/nodes/node-actions"
 import { NodeSummaryView } from "@/components/nodes/node-summary"
 import { NodeServicesView } from "@/components/nodes/node-services"
 import { NodeTasksView } from "@/components/nodes/node-tasks"
@@ -41,8 +48,21 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
     }
   }, [datacenterOpen, selection.nodeId, tree.length, selected])
 
+  // The tab stays put when you move between machines — comparing the same page
+  // across two of them is most of why you would — but the view is re-derived
+  // rather than trusted, since not every node offers every page.
+  const views = selected ? viewsFor(selected) : []
+  const view: NodeView = views.includes(selection.view)
+    ? selection.view
+    : (views[0] ?? "summary")
+
   const openNode = (nodeId: string) => {
-    setSelection({ nodeId, view: "summary" })
+    setSelection((prev) => ({
+      nodeId,
+      // Shell is a live SSH connection, not a page: carrying it over would
+      // open a session on every machine you happened to click through.
+      view: prev.view === "shell" ? "summary" : prev.view,
+    }))
     setDatacenterOpen(false)
   }
 
@@ -50,21 +70,41 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
     <>
       <AppShell
         nodes={tree}
-        selection={selection}
-        onSelect={(sel) => {
-          setSelection(sel)
-          setDatacenterOpen(false)
-        }}
+        selectedId={selection.nodeId}
+        onSelect={openNode}
         datacenterOpen={datacenterOpen}
         onDatacenter={() => setDatacenterOpen(true)}
         onAddDevice={() => setAddOpen(true)}
         onLogout={onLogout}
         clock={updatedAt ? `Last update: ${formatClock(updatedAt)}` : "Last update: —"}
       >
+        {!datacenterOpen && selected && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Crumbs
+                trail={["Datacenter", selected.label, VIEW_META[view].label]}
+              />
+              <NodeActions
+                node={selected}
+                onChanged={refresh}
+                onDeleted={() => {
+                  setDatacenterOpen(true)
+                  refresh()
+                }}
+              />
+            </div>
+            <NodeTabs
+              views={views}
+              active={view}
+              onSelect={(v) => setSelection((prev) => ({ ...prev, view: v }))}
+            />
+          </>
+        )}
+
         {/* Keyed on the selection so navigating away from a crashed view
             clears the error rather than pinning it to every node after. */}
         <ErrorBoundary
-          key={datacenterOpen ? "datacenter" : `${selection.nodeId}:${selection.view}`}
+          key={datacenterOpen ? "datacenter" : `${selection.nodeId}:${view}`}
           label={datacenterOpen ? "Datacenter" : selected?.label}
         >
         {datacenterOpen ? (
@@ -73,26 +113,18 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
           <Panel>
             <PanelMessage>Pilih node di sebelah kiri.</PanelMessage>
           </Panel>
-        ) : selection.view === "services" ? (
+        ) : view === "services" ? (
           <NodeServicesView key={selected.id} node={selected} />
-        ) : selection.view === "tasks" ? (
+        ) : view === "tasks" ? (
           <NodeTasksView key={selected.id} node={selected} />
-        ) : selection.view === "apps" ? (
+        ) : view === "apps" ? (
           <NodeAppsView key={selected.id} node={selected} />
-        ) : selection.view === "shell" ? (
+        ) : view === "shell" ? (
           <NodeShellView key={selected.id} node={selected} />
         ) : selected.kind === "router9" ? (
-          <Router9View key={selected.id} node={selected} />
+          <Router9View key={selected.id} />
         ) : (
-          <NodeSummaryView
-            key={selected.id}
-            node={selected}
-            onNodesChanged={refresh}
-            onDeleted={() => {
-              setDatacenterOpen(true)
-              refresh()
-            }}
-          />
+          <NodeSummaryView key={selected.id} node={selected} />
         )}
         </ErrorBoundary>
       </AppShell>

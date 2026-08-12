@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react"
 import { Bell, BellOff, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
-import { Crumbs } from "@/components/shell/app-shell"
 import { Panel, PanelHead, PanelMessage, RowSkeleton } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -252,14 +251,6 @@ export function NodeAppsView({ node }: { node: TreeNode }) {
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <Crumbs trail={["Datacenter", node.label, "Apps"]} />
-        <Button size="sm" onClick={() => setAdding(true)}>
-          <Plus className="size-3.5" />
-          Tambah check
-        </Button>
-      </div>
-
       <Panel>
         <PanelHead title="HTTP health checks">
           <div className="flex items-center gap-2">
@@ -269,6 +260,10 @@ export function NodeAppsView({ node }: { node: TreeNode }) {
               </Badge>
             )}
             <Badge variant="outline">{list.length} check</Badge>
+            <Button size="sm" onClick={() => setAdding(true)}>
+              <Plus className="size-3.5" />
+              Tambah check
+            </Button>
           </div>
         </PanelHead>
 

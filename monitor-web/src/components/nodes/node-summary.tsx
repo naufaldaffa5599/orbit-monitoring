@@ -1,7 +1,5 @@
 import { useCallback } from "react"
 import { Cpu, HardDrive, MemoryStick } from "lucide-react"
-import { Crumbs } from "@/components/shell/app-shell"
-import { NodeActions } from "@/components/nodes/node-actions"
 import { Panel, PanelBody, PanelHead, PanelMessage } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
 import { UsageChart } from "@/components/system/usage-chart"
@@ -82,15 +80,7 @@ function usage(used: number | undefined, total: number | undefined): string {
   return `${formatBytes(used)} / ${formatBytes(total)}`
 }
 
-export function NodeSummaryView({
-  node,
-  onNodesChanged,
-  onDeleted,
-}: {
-  node: TreeNode
-  onNodesChanged: () => void
-  onDeleted: () => void
-}) {
+export function NodeSummaryView({ node }: { node: TreeNode }) {
   const fetchSummary = useCallback(
     () => api.nodeSummary(node.id),
     [node.id],
@@ -115,44 +105,36 @@ export function NodeSummaryView({
   // it is off, the same way a stopped guest does.
   if (nodeUp(node) === false) {
     return (
-      <>
-        <NodeHeader node={node} onChanged={onNodesChanged} onDeleted={onDeleted} />
-        <Panel>
-          <PanelHead title="Status">
-            <Badge variant="outline">offline</Badge>
-          </PanelHead>
-          <PanelMessage>
-            {node.label} nggak nyaut di {node.host || "alamatnya"}.{" "}
-            {node.can_wake
-              ? "Coba Wake Up di atas buat nyalain."
-              : "Nyalain dulu buat lihat metriknya."}
-          </PanelMessage>
-        </Panel>
-      </>
+      <Panel>
+        <PanelHead title="Status">
+          <Badge variant="outline">offline</Badge>
+        </PanelHead>
+        <PanelMessage>
+          {node.label} nggak nyaut di {node.host || "alamatnya"}.{" "}
+          {node.can_wake
+            ? "Coba Wake Up di atas buat nyalain."
+            : "Nyalain dulu buat lihat metriknya."}
+        </PanelMessage>
+      </Panel>
     )
   }
 
   if (node.kind === "vm" && node.status !== "running") {
     return (
-      <>
-        <NodeHeader node={node} onChanged={onNodesChanged} onDeleted={onDeleted} />
-        <Panel>
-          <PanelHead title="Status">
-            <Badge variant="outline">{node.status}</Badge>
-          </PanelHead>
-          <PanelMessage>
-            VM ini sedang <b>{node.status}</b>. Jalanin dari Proxmox dulu buat
-            lihat metriknya.
-          </PanelMessage>
-        </Panel>
-      </>
+      <Panel>
+        <PanelHead title="Status">
+          <Badge variant="outline">{node.status}</Badge>
+        </PanelHead>
+        <PanelMessage>
+          VM ini sedang <b>{node.status}</b>. Jalanin dari Proxmox dulu buat
+          lihat metriknya.
+        </PanelMessage>
+      </Panel>
     )
   }
 
   return (
     <>
-      <NodeHeader node={node} onChanged={onNodesChanged} onDeleted={onDeleted} />
-
       {summary?.source === "hypervisor" && (
         <Panel>
           <PanelMessage>
@@ -251,24 +233,6 @@ export function NodeSummaryView({
         </Panel>
       )}
     </>
-  )
-}
-
-/** Breadcrumb plus the actions that apply to this node. */
-function NodeHeader({
-  node,
-  onChanged,
-  onDeleted,
-}: {
-  node: TreeNode
-  onChanged: () => void
-  onDeleted: () => void
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <Crumbs trail={["Datacenter", node.label, "Summary"]} />
-      <NodeActions node={node} onChanged={onChanged} onDeleted={onDeleted} />
-    </div>
   )
 }
 

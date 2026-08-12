@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react"
 import { LogOut, Menu, Plus } from "lucide-react"
 import { ShaderBackground } from "@/components/ui/ethereal-whispers"
 import { OrbitMark } from "@/components/shell/orbit-mark"
-import { ResourceTree, type Selection } from "@/components/shell/resource-tree"
+import { ResourceTree } from "@/components/shell/resource-tree"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { TreeNode } from "@/types"
@@ -11,7 +11,7 @@ const BREAKPOINT = 820
 
 export function AppShell({
   nodes,
-  selection,
+  selectedId,
   onSelect,
   datacenterOpen,
   onDatacenter,
@@ -21,8 +21,8 @@ export function AppShell({
   children,
 }: {
   nodes: TreeNode[]
-  selection: Selection
-  onSelect: (sel: Selection) => void
+  selectedId: string
+  onSelect: (nodeId: string) => void
   datacenterOpen: boolean
   onDatacenter: () => void
   onAddDevice: () => void
@@ -111,9 +111,9 @@ export function AppShell({
           >
             <ResourceTree
               nodes={nodes}
-              selection={selection}
-              onSelect={(sel) => {
-                onSelect(sel)
+              selectedId={selectedId}
+              onSelect={(nodeId) => {
+                onSelect(nodeId)
                 close()
               }}
               datacenterOpen={datacenterOpen}

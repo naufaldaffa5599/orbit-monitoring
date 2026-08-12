@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react"
 import { FileText, Play, RotateCw, Search, Square } from "lucide-react"
 import { toast } from "sonner"
-import { Crumbs } from "@/components/shell/app-shell"
 import { Panel, PanelHead, PanelMessage, RowSkeleton } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -149,8 +148,6 @@ export function NodeServicesView({ node }: { node: TreeNode }) {
 
   return (
     <>
-      <Crumbs trail={["Datacenter", node.label, "Services"]} />
-
       <Panel>
         <PanelHead title={node.os === "windows" ? "Windows services" : "systemd units"}>
           <div className="flex items-center gap-2">
