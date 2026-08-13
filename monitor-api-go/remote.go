@@ -110,6 +110,7 @@ func dropClient(deviceID string) {
 // data. Called when a device is deleted so nothing keeps dialing a host that
 // is no longer in the registry.
 func closeDeviceMonitoring(deviceID string) {
+	dropSFTP(deviceID) // before the SSH client it rides on
 	dropClient(deviceID)
 	remoteCache.Lock()
 	for key := range remoteCache.m {

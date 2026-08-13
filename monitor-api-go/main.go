@@ -63,6 +63,17 @@ func routes() http.Handler {
 	mux.Handle("GET /api/nodes/{node_id}/ports", handler(handleNodePorts))
 	mux.Handle("POST /api/nodes/{node_id}/processes/{pid}/kill", handler(handleNodeKillProcess))
 
+	// Files, over SFTP
+	mux.Handle("GET /api/nodes/{node_id}/files", handler(handleNodeFiles))
+	mux.Handle("DELETE /api/nodes/{node_id}/files", handler(handleNodeFileDelete))
+	mux.Handle("GET /api/nodes/{node_id}/files/read", handler(handleNodeFileRead))
+	mux.Handle("PUT /api/nodes/{node_id}/files/write", handler(handleNodeFileWrite))
+	mux.Handle("POST /api/nodes/{node_id}/files/mkdir", handler(handleNodeFileMkdir))
+	mux.Handle("POST /api/nodes/{node_id}/files/copy", handler(handleNodeFileCopy))
+	mux.Handle("POST /api/nodes/{node_id}/files/move", handler(handleNodeFileMove))
+	mux.Handle("GET /api/nodes/{node_id}/files/download", handler(handleNodeFileDownload))
+	mux.Handle("POST /api/nodes/{node_id}/files/upload", handler(handleNodeFileUpload))
+
 	// App health checks
 	mux.Handle("GET /api/checks", handler(handleListChecks))
 	mux.Handle("POST /api/checks", handler(handleCreateCheck))
