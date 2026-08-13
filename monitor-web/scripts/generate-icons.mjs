@@ -9,6 +9,10 @@
  *   public/icons/icon-192.png   PWA
  *   public/icons/icon-512.png   PWA
  *
+ * ../monitor-app gets the same two PNGs. It is the fallback frontend, served
+ * whenever FRONTEND_DIR is unset, so it carries the same mark rather than the
+ * one it shipped with before the rename.
+ *
  * The geometry lives in src/components/shell/orbit-geometry.json, which the
  * React component reads too — that file is the only place the shape is
  * described, so the topbar and the favicon cannot drift apart.
@@ -79,14 +83,17 @@ const iconSvg =
   `<g transform="translate(${offset} ${offset}) scale(${iconScale})">${shapes(brand)}</g>` +
   `</svg>`
 
-await mkdir(resolve(root, "public/icons"), { recursive: true })
-for (const size of [192, 512]) {
-  const out = resolve(root, `public/icons/icon-${size}.png`)
-  await sharp(Buffer.from(iconSvg), { density: 384 })
-    .resize(size, size)
-    .png({ compressionLevel: 9 })
-    .toFile(out)
-  console.log(`  public/icons/icon-${size}.png`)
+const iconDirs = ["public/icons", "../monitor-app/icons"]
+for (const dir of iconDirs) {
+  await mkdir(resolve(root, dir), { recursive: true })
+  for (const size of [192, 512]) {
+    const out = resolve(root, `${dir}/icon-${size}.png`)
+    await sharp(Buffer.from(iconSvg), { density: 384 })
+      .resize(size, size)
+      .png({ compressionLevel: 9 })
+      .toFile(out)
+    console.log(`  ${dir}/icon-${size}.png`)
+  }
 }
 
 console.log(`\n✓ Selesai — celah cincin ke titik ${gap.toFixed(2)} unit (min ${minGap}).`)

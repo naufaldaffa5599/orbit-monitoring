@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css?v=17">
-    <title>Monitor Hub</title>
+    <title>Orbit</title>
 </head>
 
 <body>
@@ -28,8 +28,15 @@
             <div class="topbar-left">
                 <button class="nav-toggle" id="nav-toggle" aria-label="Toggle navigation">☰</button>
                 <div class="brand">
-                    <span class="brand-mark">▚</span>
-                    <span class="brand-name">Monitor <b>Hub</b></span>
+                    <span class="brand-mark">
+                        <!-- The Orbit mark. Geometry mirrors monitor-web's
+                             orbit-geometry.json — keep the two in step. -->
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <ellipse cx="12" cy="12" rx="10.4" ry="5.6" stroke="currentColor" stroke-width="2.2" transform="rotate(-28 12 12)"/>
+                            <circle cx="12" cy="12" r="2.8" fill="currentColor"/>
+                        </svg>
+                    </span>
+                    <span class="brand-name">Orbit</span>
                 </div>
                 <span class="brand-ver" id="brand-ver">Server Environment</span>
             </div>
@@ -52,7 +59,7 @@
                 <nav class="tree">
                     <div class="tree-row tree-root">
                         <span class="tree-icon">🗄️</span>
-                        <span class="tree-label">Datacenter</span>
+                        <span class="tree-label">Station</span>
                     </div>
                     <div class="tree-row tree-node">
                         <span class="tree-icon">🖥️</span>
@@ -89,7 +96,7 @@
                 <main class="content" id="tab-system">
                     <div class="section-header">
                         <div class="crumbs">
-                            <span class="crumb">Datacenter</span>
+                            <span class="crumb">Station</span>
                             <span class="crumb-sep">›</span>
                             <span class="crumb crumb-current" id="sys-hostname">—</span>
                             <span class="crumb-sep">›</span>
@@ -193,7 +200,7 @@
                 <main class="content hidden" id="tab-services">
                     <div class="section-header">
                         <div class="crumbs">
-                            <span class="crumb">Datacenter</span>
+                            <span class="crumb">Station</span>
                             <span class="crumb-sep">›</span>
                             <span class="crumb crumb-current">Services</span>
                         </div>
@@ -216,7 +223,7 @@
                 <main class="content hidden" id="tab-devices">
                     <div class="section-header">
                         <div class="crumbs">
-                            <span class="crumb">Datacenter</span>
+                            <span class="crumb">Station</span>
                             <span class="crumb-sep">›</span>
                             <span class="crumb crumb-current">Devices</span>
                         </div>

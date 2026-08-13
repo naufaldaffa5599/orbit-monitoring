@@ -1,7 +1,7 @@
 {
-    "name": "Monitor Hub",
-    "short_name": "Monitor",
-    "description": "Discord Bot & System Monitor",
+    "name": "Orbit",
+    "short_name": "Orbit",
+    "description": "Kontrol dan pantau seluruh mesin dari satu tempat",
     "start_url": "/",
     "display": "standalone",
     "background_color": "#0b0d12",
