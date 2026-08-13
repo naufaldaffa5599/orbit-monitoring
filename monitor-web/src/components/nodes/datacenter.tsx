@@ -1,6 +1,7 @@
 import { useCallback } from "react"
 import { Cpu, HardDrive, MemoryStick, Server } from "lucide-react"
 import { Crumbs } from "@/components/shell/app-shell"
+import { OrbitIcon, isOrbitIcon } from "@/components/shell/orbit-icon"
 import { Panel, PanelBody, PanelHead, PanelMessage, RowSkeleton } from "@/components/panel"
 import { Badge } from "@/components/ui/badge"
 import { Gauge } from "@/components/nodes/node-summary"
@@ -46,7 +47,11 @@ function GuestRow({
       onClick={() => onOpen(node.id)}
       className="flex w-full items-center gap-3 border-b px-3.5 py-2.5 text-left transition-colors last:border-b-0 hover:bg-white/4"
     >
-      <span className="shrink-0 text-base">{node.icon || "🖥️"}</span>
+      {isOrbitIcon(node.icon) ? (
+        <OrbitIcon name={node.icon} className="size-5 shrink-0 text-primary" />
+      ) : (
+        <span className="shrink-0 text-base">{node.icon || "🖥️"}</span>
+      )}
 
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex items-center gap-2">

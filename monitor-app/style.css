@@ -324,6 +324,13 @@ body {
     text-align: center;
 }
 
+.tree-icon svg {
+    width: 0.95rem;
+    height: 0.95rem;
+    vertical-align: -0.15em;
+    color: var(--accent);
+}
+
 .tree-label {
     overflow: hidden;
     text-overflow: ellipsis;

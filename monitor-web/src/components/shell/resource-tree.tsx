@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ChevronDown, ChevronRight, HardDrive, Server } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { OrbitIcon, isOrbitIcon } from "@/components/shell/orbit-icon"
 import { ROOT_LABEL } from "@/lib/labels"
 import { nodeUp } from "@/lib/node-status"
 import type { TreeNode } from "@/types"
@@ -106,9 +107,13 @@ export function ResourceTree({
                   : "text-sidebar-foreground hover:bg-white/5 hover:text-foreground",
             )}
           >
-            {node.kind === "hypervisor" ? (
+            {isOrbitIcon(node.icon) ? (
+              <OrbitIcon name={node.icon} className="size-3.5 shrink-0" />
+            ) : node.kind === "hypervisor" ? (
               <Server className="size-3.5 shrink-0" />
             ) : (
+              // An icon that is not one of ours is an emoji someone typed into
+              // the rename box, so it is still drawn as the text it is.
               <span className="shrink-0 text-xs">{node.icon || "🖥️"}</span>
             )}
             <span className="truncate">{node.label}</span>

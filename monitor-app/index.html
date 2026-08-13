@@ -58,11 +58,24 @@
                 </div>
                 <nav class="tree">
                     <div class="tree-row tree-root">
-                        <span class="tree-icon">🗄️</span>
+                        <!-- Marks from monitor-web's orbit-geometry.json: the
+                             "gravity" and "machine" shapes, inline because this
+                             tree is static HTML. -->
+                        <span class="tree-icon">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <ellipse cx="12" cy="12" rx="10.4" ry="5.6" stroke="currentColor" stroke-width="2.2" transform="rotate(-28 12 12)"/>
+                                <circle cx="12" cy="12" r="2.8" fill="currentColor"/>
+                            </svg>
+                        </span>
                         <span class="tree-label">Station</span>
                     </div>
                     <div class="tree-row tree-node">
-                        <span class="tree-icon">🖥️</span>
+                        <span class="tree-icon">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <ellipse cx="12" cy="12" rx="10.4" ry="5.6" stroke="currentColor" stroke-width="2.2"/>
+                                <circle cx="12" cy="12" r="2.8" fill="currentColor"/>
+                            </svg>
+                        </span>
                         <span class="tree-label" id="tree-hostname">node</span>
                         <span class="tree-dot online" id="tree-node-dot" title="Online"></span>
                     </div>

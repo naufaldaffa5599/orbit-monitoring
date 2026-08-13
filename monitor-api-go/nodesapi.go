@@ -280,8 +280,11 @@ func handleRenameNode(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 	}
-	if len([]rune(payload.Icon)) > 4 {
-		return errf(400, "icon maksimal 4 karakter")
+	// An icon is either an emoji or the name of one of the drawn marks
+	// ("gravity", "uplink"…), so the cap has to clear the longer of the two
+	// without becoming a place to store a sentence.
+	if len([]rune(payload.Icon)) > 16 {
+		return errf(400, "icon maksimal 16 karakter")
 	}
 	if err := setOverride(node.ID, nodeOverride{Label: payload.Label, Icon: payload.Icon}); err != nil {
 		return errf(500, "gagal simpan nama: "+err.Error())
