@@ -97,7 +97,7 @@ export function ResourceTree({
             className={cn(
               "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors",
               isHeading
-                ? "text-[0.72rem] font-semibold tracking-[0.04em] uppercase"
+                ? "text-[0.72rem] font-semibold tracking-[0.04em]"
                 : "text-sm",
               isSelected
                 ? "bg-primary/15 text-[#ffb469] shadow-[inset_2px_0_0_var(--primary)]"
