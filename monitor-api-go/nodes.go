@@ -470,10 +470,12 @@ func buildTree() []Node {
 		}
 		applyOverride(&relays)
 		nodes = append(nodes, relays)
-		nodes = append(nodes, Node{
+		router := Node{
 			ID: "router9", Label: "9router", Kind: KindRouter9, Parent: relaysID,
 			OS: "router", Icon: "🔀", Host: router9URL, Status: "running",
-		})
+		}
+		applyOverride(&router) // renameable like every other row
+		nodes = append(nodes, router)
 	}
 
 	// Last, so every node in the tree gets its tally — including any appended
