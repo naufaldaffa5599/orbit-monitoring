@@ -1,0 +1,4 @@
+monitor-api
+monitor-api-linux-*
+devices.json
+.env

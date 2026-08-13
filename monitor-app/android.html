@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0d12">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <title>Android Remote</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --ink: #16130e;
+            --cream: #fff4e0;
+            --yellow: #ffd93d;
+            --accent: #7c5cff;
+            --green-fill: #4ade80;
+            --red-fill: #ff7a70;
+            --bw: 3px;
+            --shadow: 3px 3px 0 var(--ink);
+            --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--cream);
+            font-family: var(--font);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            flex: 0 0 auto;
+            height: 52px;
+            padding: 0 1rem;
+            background: var(--yellow);
+            border-bottom: var(--bw) solid var(--ink);
+            color: var(--ink);
+            font-size: 0.9rem;
+            font-weight: 700;
+        }
+
+        .bar .bar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            min-width: 0;
+        }
+
+        .bar .btn-back {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            height: 34px;
+            padding: 0 0.7rem;
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--ink);
+            font-size: 0.8rem;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        .bar .btn-back:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        .bar .status {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.25rem 0.6rem;
+            border-radius: 999px;
+            border: 2px solid var(--ink);
+            background: #fff;
+            color: var(--ink);
+        }
+
+        .bar .status.connected { background: var(--green-fill); }
+        .bar .status.disconnected { background: var(--red-fill); }
+
+        .container {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .screen-wrapper {
+            max-width: 100%;
+            max-height: calc(100vh - 180px);
+            aspect-ratio: 9/16;
+            border: var(--bw) solid var(--ink);
+            border-radius: 12px;
+            background: #000;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: crosshair;
+        }
+
+        #screen-img, #screen-canvas {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            pointer-events: none;
+            user-select: none;
+        }
+
+        #screen-img.hidden, #screen-canvas.hidden { display: none; }
+
+        .bar .fps {
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.25rem 0.5rem;
+            border-radius: 999px;
+            border: 2px solid var(--ink);
+            background: #fff;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .bar .quality {
+            height: 30px;
+            border: 2px solid var(--ink);
+            border-radius: 8px;
+            background: #fff;
+            font-family: var(--font);
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0 0.3rem;
+        }
+
+        .nav-bar {
+            flex: 0 0 auto;
+            width: 100%;
+            max-width: 450px;
+            margin: 0 auto;
+            padding: 0.75rem 1rem;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            background: var(--cream);
+            border-top: var(--bw) solid var(--ink);
+            gap: 0.5rem;
+        }
+
+        .nav-btn {
+            flex: 1;
+            max-width: 70px;
+            height: 40px;
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            background: #fff;
+            color: var(--ink);
+            font-size: 0.85rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        .nav-btn:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        .keyboard-bar {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+            max-width: 450px;
+            padding: 0 1rem 0.5rem 1rem;
+            background: var(--cream);
+        }
+
+        .keyboard-input {
+            flex: 1;
+            height: 38px;
+            padding: 0 0.75rem;
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            font-family: var(--font);
+            font-weight: 600;
+            outline: none;
+        }
+
+        .keyboard-send {
+            height: 38px;
+            padding: 0 1rem;
+            border: var(--bw) solid var(--ink);
+            border-radius: 8px;
+            background: var(--accent);
+            color: #fff;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+        }
+        .keyboard-send:active {
+            transform: translate(3px, 3px);
+            box-shadow: none;
+        }
+
+        /* ================================================================
+           Ethereal dark theme — matches the dashboard's Proxmox-style shell.
+           Layered on top of the rules above so the original layout stays put
+           while every brutalist surface (white fills, hard offset shadows)
+           is restated for a dark chrome.
+           ================================================================ */
+        :root {
+            --ink: rgba(255, 255, 255, 0.12);
+            --cream: rgba(13, 16, 22, 0.92);
+            --yellow: rgba(13, 16, 22, 0.94);
+            --accent: #e57000;
+            --green-fill: rgba(78, 184, 95, 0.16);
+            --red-fill: rgba(224, 90, 85, 0.16);
+            --screen: #05070b;
+            --bw: 1px;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --text: #e7eaf0;
+            --text-muted: #7d8698;
+            --surface: rgba(255, 255, 255, 0.05);
+            --surface-hi: rgba(255, 255, 255, 0.09);
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        html, body {
+            background: radial-gradient(120% 90% at 20% 0%, #161c29 0%, #0b0d12 60%);
+            color: var(--text);
+        }
+
+        .bar {
+            background: var(--yellow);
+            color: var(--text);
+            border-bottom: 1px solid var(--ink);
+            font-weight: 600;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        .bar .btn-back,
+        .bar .status,
+        .bar .fps,
+        .bar .quality,
+        .btn-keys-toggle,
+        .tab-btn,
+        .btn-add-tab,
+        .keybar button,
+        .nav-btn,
+        .keyboard-input,
+        .paste-actions button,
+        #paste-input,
+        .toast {
+            background: var(--surface);
+            border: 1px solid var(--ink);
+            color: var(--text);
+            box-shadow: none;
+            font-weight: 600;
+        }
+
+        .bar .btn-back:hover,
+        .btn-keys-toggle:hover,
+        .tab-btn:hover,
+        .keybar button:hover,
+        .nav-btn:hover {
+            background: var(--surface-hi);
+        }
+
+        /* The pressed-in "translate into the shadow" gesture has no shadow to
+           fall into any more — swap it for a plain highlight. */
+        .bar .btn-back:active,
+        .btn-keys-toggle:active,
+        .btn-keys-toggle.active,
+        .tab-btn:active,
+        .btn-add-tab:active,
+        .keybar button:active,
+        .keybar button.active,
+        .nav-btn:active,
+        .keyboard-send:active,
+        .paste-actions button:active {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .bar .status.connected { background: var(--green-fill); color: #7fd48c; border-color: rgba(78, 184, 95, 0.35); }
+        .bar .status.disconnected { background: var(--red-fill); color: #f08b87; border-color: rgba(224, 90, 85, 0.35); }
+
+        .tabbar,
+        .keybar,
+        .nav-bar,
+        .keyboard-bar,
+        .paste-box {
+            background: var(--cream);
+            border-color: var(--ink);
+        }
+
+        .tab-btn.active,
+        .btn-keys-toggle.active,
+        .keybar button.active,
+        .btn-add-tab,
+        #paste-send,
+        .keyboard-send {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #14161d;
+        }
+
+        .tab-close {
+            border: 1px solid var(--ink);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text);
+        }
+
+        .tab-btn.active .tab-close {
+            background: rgba(0, 0, 0, 0.22);
+            border-color: rgba(0, 0, 0, 0.3);
+            color: #14161d;
+        }
+
+        .tab-close:active { background: var(--red-fill); }
+
+        .keybar .sep {
+            width: 1px;
+            background: var(--ink);
+        }
+
+        #terminals-container { background: var(--screen); }
+
+        .screen-wrapper { border-color: var(--ink); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); }
+
+        .paste-overlay { background: rgba(4, 6, 10, 0.7); }
+        .paste-label { color: var(--text-muted); font-weight: 500; }
+        #paste-input { font-weight: 400; }
+        .keyboard-input { font-weight: 400; }
+        .keyboard-input::placeholder, #paste-input::placeholder { color: var(--text-muted); }
+        .keyboard-input:focus, #paste-input:focus {
+            outline: none;
+            border-color: rgba(229, 112, 0, 0.55);
+            box-shadow: 0 0 0 2px rgba(229, 112, 0, 0.16);
+        }
+    </style>
+</head>
+<body>
+    <div class="bar">
+        <div class="bar-left">
+            <a href="/" class="btn-back">⬅ Back</a>
+            <span id="title">Android Remote</span>
+        </div>
+        <div class="bar-left">
+            <select class="quality" id="quality">
+                <option value="720x1560|8M">720p · 8M</option>
+                <option value="540x1180|4M">540p · 4M (hemat)</option>
+                <option value="1208x2644|12M">Native · 12M</option>
+            </select>
+            <span class="fps" id="fps-badge">– fps</span>
+            <span class="status disconnected" id="status-badge">Connecting</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="screen-wrapper" id="screen-wrapper">
+            <canvas id="screen-canvas"></canvas>
+            <img id="screen-img" class="hidden" alt="Screen stream">
+        </div>
+    </div>
+
+    <div class="keyboard-bar">
+        <input type="text" class="keyboard-input" id="keyboard-input" placeholder="Ketik untuk kirim teks ke HP...">
+        <button class="keyboard-send" id="keyboard-send">Kirim</button>
+    </div>
+
+    <div class="nav-bar">
+        <button class="nav-btn" data-key="4" title="Back">◀ BACK</button>
+        <button class="nav-btn" data-key="3" title="Home">● HOME</button>
+        <button class="nav-btn" data-key="187" title="Recents">■ APP</button>
+        <button class="nav-btn" data-key="26" title="Power" style="background: var(--red-fill);">⏻ PWR</button>
+        <button class="nav-btn" data-key="24" title="Volume Up">▲ VOL</button>
+        <button class="nav-btn" data-key="25" title="Volume Down">▼ VOL</button>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const deviceId = urlParams.get("id");
+        const deviceLabel = urlParams.get("label") || "Android Remote";
+        document.getElementById("title").textContent = deviceLabel;
+
+        const statusBadge = document.getElementById("status-badge");
+        const fpsBadge = document.getElementById("fps-badge");
+        const qualitySelect = document.getElementById("quality");
+        const screenWrapper = document.getElementById("screen-wrapper");
+        const screenImg = document.getElementById("screen-img");
+        const canvas = document.getElementById("screen-canvas");
+        const ctx = canvas.getContext("2d");
+
+        let ws;
+        let originalWidth = 1080;
+        let originalHeight = 1920;
+        let lastObjectUrl = null;
+        let lastError = null;   // set when the server rejects us; stops the retry loop
+
+        // The device encodes with its own hardware H.264 encoder and we decode
+        // here; without WebCodecs we fall back to the old ~2 fps screenshot poll.
+        const canDecode = typeof window.VideoDecoder === "function";
+        const mode = canDecode ? "h264" : "png";
+        screenImg.classList.toggle("hidden", canDecode);
+        canvas.classList.toggle("hidden", !canDecode);
+
+        function setStatus(cls, text) {
+            statusBadge.className = `status ${cls}`;
+            statusBadge.textContent = text;
+        }
+
+        // ── H.264 Annex-B depacketiser ──────────────────────────────────────
+        // screenrecord emits one slice per frame, so an access unit is "every
+        // parameter-set NAL seen so far, plus the next VCL NAL".
+        let decoder = null;
+        let pending = new Uint8Array(0);
+        let auParts = [];
+        let auHasKeyframe = false;
+        let frameIndex = 0;
+        let framesThisSecond = 0;
+        let fpsTimer = null;
+
+        function concat(a, b) {
+            const out = new Uint8Array(a.length + b.length);
+            out.set(a, 0);
+            out.set(b, a.length);
+            return out;
+        }
+
+        function hex2(n) { return n.toString(16).padStart(2, "0"); }
+
+        function resetDecoder() {
+            if (decoder) {
+                try { decoder.close(); } catch (e) {}
+            }
+            decoder = null;
+            pending = new Uint8Array(0);
+            auParts = [];
+            auHasKeyframe = false;
+            frameIndex = 0;
+        }
+
+        function configureDecoder(sps) {
+            // SPS payload: [start code][0x67][profile][constraints][level]
+            const codec = "avc1." + hex2(sps[4]) + hex2(sps[5]) + hex2(sps[6]);
+            decoder = new VideoDecoder({
+                output: (frame) => {
+                    if (canvas.width !== frame.displayWidth) {
+                        canvas.width = frame.displayWidth;
+                        canvas.height = frame.displayHeight;
+                    }
+                    ctx.drawImage(frame, 0, 0);
+                    frame.close();
+                    framesThisSecond++;
+                },
+                error: () => { resetDecoder(); },
+            });
+            // No `description` => the decoder expects Annex-B, which is what
+            // screenrecord already gives us.
+            decoder.configure({ codec, optimizeForLatency: true });
+        }
+
+        function emitAccessUnit() {
+            if (!decoder || auParts.length === 0) { auParts = []; return; }
+            let total = 0;
+            for (const p of auParts) total += p.length;
+            const data = new Uint8Array(total);
+            let off = 0;
+            for (const p of auParts) { data.set(p, off); off += p.length; }
+            auParts = [];
+
+            // A decoder that has not had a keyframe yet cannot start.
+            if (!auHasKeyframe && frameIndex === 0) return;
+
+            // If decoding falls behind, skip delta frames rather than build a
+            // backlog — staleness is worse than a dropped frame here.
+            const isKey = auHasKeyframe;
+            auHasKeyframe = false;
+            if (!isKey && decoder.decodeQueueSize > 4) { frameIndex++; return; }
+
+            try {
+                decoder.decode(new EncodedVideoChunk({
+                    type: isKey ? "key" : "delta",
+                    timestamp: Math.round(frameIndex * (1e6 / 60)),
+                    data,
+                }));
+                frameIndex++;
+            } catch (e) {
+                resetDecoder();
+            }
+        }
+
+        function feedH264(bytes) {
+            pending = concat(pending, bytes);
+
+            // Collect every 3-byte start code offset. A 4-byte start code is
+            // matched at its trailing three bytes; the spare zero simply stays
+            // with the previous NAL, which decoders accept.
+            const starts = [];
+            for (let i = 0; i + 2 < pending.length; i++) {
+                if (pending[i] === 0 && pending[i + 1] === 0 && pending[i + 2] === 1) {
+                    starts.push(i);
+                    i += 2;
+                }
+            }
+            if (starts.length < 2) return;
+
+            for (let s = 0; s < starts.length - 1; s++) {
+                const nal = pending.subarray(starts[s], starts[s + 1]);
+                const type = nal[3] & 0x1f;
+                if (type === 7 && !decoder) configureDecoder(nal);
+                if (type === 5) auHasKeyframe = true;
+                auParts.push(nal);
+                if (type === 1 || type === 5) emitAccessUnit();   // VCL ends a frame
+            }
+            pending = pending.slice(starts[starts.length - 1]);
+        }
+
+        const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+
+        function buildUrl() {
+            const [size, bitrate] = qualitySelect.value.split("|");
+            return `${wsProto}//${window.location.host}/ws/android/${encodeURIComponent(deviceId)}`
+                 + `?mode=${mode}&size=${size}&bitrate=${bitrate}`;
+        }
+
+        function connect() {
+            setStatus("disconnected", "Connecting...");
+            resetDecoder();
+            ws = new WebSocket(buildUrl());
+            ws.binaryType = "arraybuffer";
+
+            ws.onopen = () => {
+                lastError = null;
+                setStatus("connected", canDecode ? "Connected · H.264" : "Connected · PNG");
+            };
+
+            ws.onmessage = (event) => {
+                if (typeof event.data === "string") {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === "info") {
+                            originalWidth = data.width || 1080;
+                            originalHeight = data.height || 1920;
+                            screenWrapper.style.aspectRatio = `${originalWidth}/${originalHeight}`;
+                        } else if (data.type === "stream_restart") {
+                            // New screenrecord process => new SPS/PPS and IDR.
+                            resetDecoder();
+                        } else if (data.type === "error") {
+                            lastError = data.msg;
+                        }
+                    } catch (e) {}
+                } else if (canDecode) {
+                    feedH264(new Uint8Array(event.data));
+                } else {
+                    if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
+                    lastObjectUrl = URL.createObjectURL(new Blob([event.data]));
+                    screenImg.src = lastObjectUrl;
+                    framesThisSecond++;
+                }
+            };
+
+            ws.onclose = (event) => {
+                // 4404 = unknown device, 4500 = ADB refused. Retrying those just
+                // loops forever, so surface the reason and stop.
+                if (event.code === 4404 || event.code === 4500) {
+                    setStatus("disconnected", lastError || "Connection failed");
+                    return;
+                }
+                setStatus("disconnected", "Disconnected");
+                setTimeout(connect, 3000);
+            };
+
+            ws.onerror = () => {
+                setStatus("disconnected", "Error");
+            };
+        }
+
+        qualitySelect.addEventListener("change", () => {
+            if (ws) { ws.onclose = null; ws.close(); }
+            connect();
+        });
+
+        if (deviceId) {
+            connect();
+            fpsTimer = setInterval(() => {
+                fpsBadge.textContent = `${framesThisSecond} fps`;
+                framesThisSecond = 0;
+            }, 1000);
+        } else {
+            setStatus("disconnected", "No Device ID");
+        }
+
+        // Navigation / physical keys
+        document.querySelectorAll(".nav-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: "keyevent",
+                        code: btn.dataset.key
+                    }));
+                }
+            });
+        });
+
+        // Typing / text input
+        const keyboardInput = document.getElementById("keyboard-input");
+        const keyboardSend = document.getElementById("keyboard-send");
+
+        function sendText() {
+            const text = keyboardInput.value;
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: "text",
+                    text: text
+                }));
+                keyboardInput.value = "";
+            }
+        }
+        keyboardSend.addEventListener("click", sendText);
+        keyboardInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") sendText();
+        });
+
+        // Interactive taps and swipes on screen
+        let isDown = false;
+        let startX = 0;
+        let startY = 0;
+        let startTime = 0;
+
+        function getCoords(e) {
+            const rect = screenWrapper.getBoundingClientRect();
+            // Get coordinate relative to canvas bounding box
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            
+            const relativeX = (clientX - rect.left) / rect.width;
+            const relativeY = (clientY - rect.top) / rect.height;
+            
+            // Map to original device pixels
+            return {
+                x: Math.round(relativeX * originalWidth),
+                y: Math.round(relativeY * originalHeight)
+            };
+        }
+
+        screenWrapper.addEventListener("mousedown", (e) => {
+            e.preventDefault();
+            const coords = getCoords(e);
+            isDown = true;
+            startX = coords.x;
+            startY = coords.y;
+            startTime = Date.now();
+        });
+
+        window.addEventListener("mouseup", (e) => {
+            if (!isDown) return;
+            isDown = false;
+            
+            const rect = screenWrapper.getBoundingClientRect();
+            // check if mouseup inside wrapper
+            const clientX = e.clientX;
+            const clientY = e.clientY;
+            if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                const coords = getCoords(e);
+                handleRelease(coords.x, coords.y);
+            }
+        });
+
+        // Touch events
+        screenWrapper.addEventListener("touchstart", (e) => {
+            const coords = getCoords(e);
+            isDown = true;
+            startX = coords.x;
+            startY = coords.y;
+            startTime = Date.now();
+        });
+
+        screenWrapper.addEventListener("touchend", (e) => {
+            if (!isDown) return;
+            isDown = false;
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                // Get coords of last touch point
+                const rect = screenWrapper.getBoundingClientRect();
+                const clientX = e.changedTouches[0].clientX;
+                const clientY = e.changedTouches[0].clientY;
+                const relativeX = (clientX - rect.left) / rect.width;
+                const relativeY = (clientY - rect.top) / rect.height;
+                const endX = Math.round(relativeX * originalWidth);
+                const endY = Math.round(relativeY * originalHeight);
+                handleRelease(endX, endY);
+            }
+        });
+
+        function handleRelease(endX, endY) {
+            const duration = Date.now() - startTime;
+            const dist = Math.hypot(endX - startX, endY - startY);
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                if (dist < 10) {
+                    if (duration > 500) {
+                        ws.send(JSON.stringify({
+                            type: "longpress",
+                            x: startX,
+                            y: startY
+                        }));
+                    } else {
+                        ws.send(JSON.stringify({
+                            type: "tap",
+                            x: startX,
+                            y: startY
+                        }));
+                    }
+                } else {
+                    ws.send(JSON.stringify({
+                        type: "swipe",
+                        x1: startX,
+                        y1: startY,
+                        x2: endX,
+                        y2: endY,
+                        duration: duration
+                    }));
+                }
+            }
+        }
+    </script>
+</body>
+</html>

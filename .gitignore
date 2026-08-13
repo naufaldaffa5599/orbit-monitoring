@@ -1,6 +1,8 @@
 # ── Secrets & runtime config (contain credentials — never commit) ──
 .env
 devices.json
+node-overrides.json
+checks.json
 
 # ── Python ──
 __pycache__/
@@ -18,3 +20,7 @@ env/
 Thumbs.db
 *.swp
 *.log
+
+# ── Scratch (backup migrasi Python, screenshot bug) ──
+monitor-api-python-backup.tar.gz
+ss.png

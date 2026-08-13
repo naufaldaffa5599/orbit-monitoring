@@ -1,0 +1,150 @@
+{
+  "$comment": "Single source of truth for the Orbit mark. Read by orbit-mark.tsx (the topbar) and by scripts/generate-icons.mjs (favicon + PWA icons). Change it here and run `npm run icons`.",
+  "viewBox": 24,
+  "ellipse": {
+    "cx": 12,
+    "cy": 12,
+    "rx": 10.4,
+    "ry": 5.6,
+    "strokeWidth": 2.2,
+    "rotate": -28
+  },
+  "dot": {
+    "cx": 12,
+    "cy": 12,
+    "r": 2.8
+  },
+  "brand": "#e57000",
+  "background": "#0b0d12",
+  "iconScale": 0.56,
+  "$icons": "Bentuk tiap ikon, sebagai data biar komponen React dan generator gambar hal yang sama. Beda antar-ikon sengaja lewat arah miring cincin, cincin putus, dan titik di luar — tiga hal yang masih kebaca waktu dikecilin ke 14px di baris tree.",
+  "icons": {
+    "gravity": {
+      "rings": [
+        {
+          "rx": 10.4,
+          "ry": 5.6,
+          "rotate": -28,
+          "strokeWidth": 2.2
+        }
+      ],
+      "dots": [
+        {
+          "cx": 12,
+          "cy": 12,
+          "r": 2.8
+        }
+      ]
+    },
+    "vault": {
+      "rings": [
+        {
+          "rx": 10.4,
+          "ry": 5.6,
+          "rotate": -28,
+          "strokeWidth": 2.2
+        }
+      ],
+      "squares": [
+        {
+          "x": 8.5,
+          "y": 8.5,
+          "size": 7,
+          "rx": 1
+        }
+      ]
+    },
+    "orbiter": {
+      "rings": [
+        {
+          "rx": 7.7,
+          "ry": 4.14,
+          "rotate": -28,
+          "strokeWidth": 2.2
+        }
+      ],
+      "dots": [
+        {
+          "cx": 12,
+          "cy": 12,
+          "r": 2.2
+        },
+        {
+          "cx": 19.16,
+          "cy": 2.73,
+          "r": 2.3
+        }
+      ]
+    },
+    "machine": {
+      "rings": [
+        {
+          "rx": 10.4,
+          "ry": 5.6,
+          "rotate": 0,
+          "strokeWidth": 2.2
+        }
+      ],
+      "dots": [
+        {
+          "cx": 12,
+          "cy": 12,
+          "r": 2.8
+        }
+      ]
+    },
+    "probe": {
+      "rings": [
+        {
+          "rx": 8.11,
+          "ry": 4.37,
+          "rotate": 28,
+          "strokeWidth": 2.2
+        }
+      ],
+      "dots": [
+        {
+          "cx": 12,
+          "cy": 12,
+          "r": 2.4
+        }
+      ]
+    },
+    "link": {
+      "rings": [
+        {
+          "rx": 10.4,
+          "ry": 5.6,
+          "rotate": -28,
+          "strokeWidth": 2.2,
+          "dash": "11 8"
+        }
+      ],
+      "dots": [
+        {
+          "cx": 12,
+          "cy": 12,
+          "r": 2.8
+        }
+      ]
+    },
+    "uplink": {
+      "rings": [
+        {
+          "rx": 10.4,
+          "ry": 5.6,
+          "rotate": -28,
+          "strokeWidth": 2.2,
+          "dash": "11 8"
+        },
+        {
+          "rx": 5.2,
+          "ry": 2.8,
+          "rotate": -28,
+          "strokeWidth": 1.8,
+          "dash": "5 4"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# The unit is still called monitor-api.service on purpose: the sudoers rule
+# in monitor-api-services.sudoers matches that exact name, and renaming it
+# would break both the dashboard's Services buttons and the restart command.
+[Unit]
+Description=Orbit API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daffa
+WorkingDirectory=/home/daffa/projects/orbit-monitoring/monitor-api-go
+
+# devices.json is resolved from WorkingDirectory, and the frontend from its
+# sibling ../monitor-app. Both can be overridden with MONITOR_DIR /
+# FRONTEND_DIR if the layout ever changes.
+EnvironmentFile=-/home/daffa/projects/orbit-monitoring/monitor-api-go/.env
+ExecStart=/home/daffa/projects/orbit-monitoring/monitor-api-go/monitor-api
+
+Restart=always
+RestartSec=5
+
+# The binary has no interpreter and no site-packages to find, so it needs
+# nothing on PATH except the tools it shells out to.
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+[Install]
+WantedBy=multi-user.target

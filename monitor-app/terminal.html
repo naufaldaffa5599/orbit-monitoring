@@ -4,12 +4,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#ffd93d">
+    <meta name="theme-color" content="#0b0d12">
     <link rel="icon" type="image/png" href="icons/icon-192.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
     <title>Terminal</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
         :root {
             --ink: #16130e;
@@ -285,7 +285,7 @@
             border-radius: 2px;
         }
 
-        /* Terminal region — dark "screen" (xterm background is #0a0e1a, set in JS) */
+        /* Terminal region — dark "screen" (xterm background is #05070b, set in JS) */
         #terminals-container {
             flex: 1 1 auto;
             min-height: 0;
@@ -401,6 +401,144 @@
         @media (prefers-reduced-motion: reduce) {
             * { transition-duration: 0.01ms !important; }
         }
+
+        /* ================================================================
+           Ethereal dark theme — matches the dashboard's Proxmox-style shell.
+           Layered on top of the rules above so the original layout stays put
+           while every brutalist surface (white fills, hard offset shadows)
+           is restated for a dark chrome.
+           ================================================================ */
+        :root {
+            --ink: rgba(255, 255, 255, 0.12);
+            --cream: rgba(13, 16, 22, 0.92);
+            --yellow: rgba(13, 16, 22, 0.94);
+            --accent: #e57000;
+            --green-fill: rgba(78, 184, 95, 0.16);
+            --red-fill: rgba(224, 90, 85, 0.16);
+            --screen: #05070b;
+            --bw: 1px;
+            --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+            --text: #e7eaf0;
+            --text-muted: #7d8698;
+            --surface: rgba(255, 255, 255, 0.05);
+            --surface-hi: rgba(255, 255, 255, 0.09);
+            --font: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        html, body {
+            background: radial-gradient(120% 90% at 20% 0%, #161c29 0%, #0b0d12 60%);
+            color: var(--text);
+        }
+
+        .bar {
+            background: var(--yellow);
+            color: var(--text);
+            border-bottom: 1px solid var(--ink);
+            font-weight: 600;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        .bar .btn-back,
+        .bar .status,
+        .bar .fps,
+        .bar .quality,
+        .btn-keys-toggle,
+        .tab-btn,
+        .btn-add-tab,
+        .keybar button,
+        .nav-btn,
+        .keyboard-input,
+        .paste-actions button,
+        #paste-input,
+        .toast {
+            background: var(--surface);
+            border: 1px solid var(--ink);
+            color: var(--text);
+            box-shadow: none;
+            font-weight: 600;
+        }
+
+        .bar .btn-back:hover,
+        .btn-keys-toggle:hover,
+        .tab-btn:hover,
+        .keybar button:hover,
+        .nav-btn:hover {
+            background: var(--surface-hi);
+        }
+
+        /* The pressed-in "translate into the shadow" gesture has no shadow to
+           fall into any more — swap it for a plain highlight. */
+        .bar .btn-back:active,
+        .btn-keys-toggle:active,
+        .btn-keys-toggle.active,
+        .tab-btn:active,
+        .btn-add-tab:active,
+        .keybar button:active,
+        .keybar button.active,
+        .nav-btn:active,
+        .keyboard-send:active,
+        .paste-actions button:active {
+            transform: none;
+            box-shadow: none;
+        }
+
+        .bar .status.connected { background: var(--green-fill); color: #7fd48c; border-color: rgba(78, 184, 95, 0.35); }
+        .bar .status.disconnected { background: var(--red-fill); color: #f08b87; border-color: rgba(224, 90, 85, 0.35); }
+
+        .tabbar,
+        .keybar,
+        .nav-bar,
+        .keyboard-bar,
+        .paste-box {
+            background: var(--cream);
+            border-color: var(--ink);
+        }
+
+        .tab-btn.active,
+        .btn-keys-toggle.active,
+        .keybar button.active,
+        .btn-add-tab,
+        #paste-send,
+        .keyboard-send {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #14161d;
+        }
+
+        .tab-close {
+            border: 1px solid var(--ink);
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--text);
+        }
+
+        .tab-btn.active .tab-close {
+            background: rgba(0, 0, 0, 0.22);
+            border-color: rgba(0, 0, 0, 0.3);
+            color: #14161d;
+        }
+
+        .tab-close:active { background: var(--red-fill); }
+
+        .keybar .sep {
+            width: 1px;
+            background: var(--ink);
+        }
+
+        #terminals-container { background: var(--screen); }
+
+        .screen-wrapper { border-color: var(--ink); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); }
+
+        .paste-overlay { background: rgba(4, 6, 10, 0.7); }
+        .paste-label { color: var(--text-muted); font-weight: 500; }
+        #paste-input { font-weight: 400; }
+        .keyboard-input { font-weight: 400; }
+        .keyboard-input::placeholder, #paste-input::placeholder { color: var(--text-muted); }
+        .keyboard-input:focus, #paste-input:focus {
+            outline: none;
+            border-color: rgba(229, 112, 0, 0.55);
+            box-shadow: 0 0 0 2px rgba(229, 112, 0, 0.16);
+        }
     </style>
 </head>
 
@@ -469,27 +607,21 @@
         document.title = `${label} — Terminal`;
         document.getElementById("title").textContent = label;
 
-        // Which tabs (session ids) are open for this device is remembered in
-        // localStorage. Closing this whole browser tab/window (e.g. the
-        // ← Dashboard button, or just closing Chrome) used to silently lose
-        // every session — the SSH shells actually kept running server-side
-        // for hours, but there was no way left to get back to them, since
-        // clicking Connect again minted a brand new random session id. Now
-        // reopening the same device restores every tab that was open,
-        // reattaching each one to its still-alive shell with history intact.
-        const STORAGE_KEY = `terminal-tabs:${deviceId}`;
-        function loadSavedSessionIds() {
+        // Which terminals exist for a device is the server's business, not
+        // this browser's. It reads them off tmux on the target machine, so the
+        // list is the same whether you open this page from the laptop you
+        // started the session on, a different browser, or your phone — pick up
+        // exactly where you left off. (This used to live in localStorage,
+        // which meant sessions were invisible from any other device.)
+        async function fetchSessions() {
             try {
-                const arr = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-                return Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : [];
+                const res = await fetch(`/api/devices/${encodeURIComponent(deviceId)}/sessions`);
+                if (!res.ok) return [];
+                const data = await res.json();
+                return Array.isArray(data.sessions) ? data.sessions : [];
             } catch (e) {
-                return [];
+                return []; // offline/API down — start a fresh tab rather than hang
             }
-        }
-        function saveSessionIds() {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(tabs.map((t) => t.sessionId)));
-            } catch (e) { /* storage full/unavailable — worst case just don't persist */ }
         }
 
         // If this tab was opened from the dashboard (window.open), just close
@@ -634,9 +766,13 @@
             tab.term.focus();
         }
 
+        // Becomes a tmux session name on the target, so it has to stay inside
+        // the charset the server accepts ([A-Za-z0-9_-], max 32) — a raw UUID
+        // is fine too but this keeps the name readable in `tmux ls`.
         function newSessionId() {
-            return (crypto.randomUUID && crypto.randomUUID()) ||
-                `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const b = new Uint8Array(6);
+            crypto.getRandomValues(b);
+            return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
         }
 
         // Tab labels reflect current POSITION ("Tab 1", "Tab 2", ...), not an
@@ -667,7 +803,7 @@
             const term = new Terminal({
                 cursorBlink: true,
                 fontSize: 14,
-                theme: { background: "#0a0e1a" },
+                theme: { background: "#05070b", foreground: "#d4dae5", cursor: "#e57000" },
             });
             const fitAddon = new FitAddon.FitAddon();
             term.loadAddon(fitAddon);
@@ -688,7 +824,6 @@
             };
             tabs.push(tab);
             relabelTabs();
-            saveSessionIds();
 
             tabBtn.addEventListener("click", (e) => {
                 if (e.target.closest("[data-close]")) {
@@ -731,11 +866,15 @@
                 tab.ws.onclose = null; // don't trigger reconnect logic on manual close
                 tab.ws.close();
             }
+            // Closing the websocket only detaches now — the shell itself lives
+            // in tmux on the target so it survives restarts, which means an
+            // explicit close has to say so or the session leaks over there.
+            fetch(`/api/devices/${encodeURIComponent(deviceId)}/sessions/${encodeURIComponent(tab.sessionId)}`,
+                { method: "DELETE", keepalive: true }).catch(() => { });
             tab.term.dispose();
             tab.paneEl.remove();
             tab.tabBtn.remove();
             relabelTabs();
-            saveSessionIds();
 
             if (tabs.length === 0) {
                 createTab(); // never end up with zero tabs
@@ -1049,13 +1188,32 @@
             paneEl.textContent = "No device specified.";
             document.getElementById("terminals-container").appendChild(paneEl);
         } else {
-            const saved = loadSavedSessionIds();
-            if (saved.length > 0) {
-                saved.forEach((sid) => createTab(sid));
-                switchTab(tabs[0].id); // show "Tab 1" first, not whichever was restored last
-            } else {
-                createTab();
-            }
+            (async () => {
+                const sessions = await fetchSessions();
+                if (sessions.length > 0) {
+                    sessions.forEach((s) => createTab(s.id));
+                    switchTab(tabs[0].id); // show "Tab 1" first, not whichever came last
+                } else {
+                    createTab();
+                }
+                // A session started elsewhere (other laptop, phone) won't be in
+                // the list this page loaded with, so re-check whenever the page
+                // comes back to the foreground and adopt anything new. Tabs are
+                // only ever added here — a list that came back short because the
+                // API blipped must not close a terminal you're working in.
+                document.addEventListener("visibilitychange", async () => {
+                    if (document.visibilityState !== "visible") return;
+                    const known = new Set(tabs.map((t) => t.sessionId));
+                    const wasActive = activeTabId;
+                    let adopted = false;
+                    for (const s of await fetchSessions()) {
+                        if (!known.has(s.id)) { createTab(s.id); adopted = true; }
+                    }
+                    // createTab focuses what it creates; don't yank the user out
+                    // of the terminal they were already looking at.
+                    if (adopted && tabs.some((t) => t.id === wasActive)) switchTab(wasActive);
+                });
+            })();
         }
     </script>
 </body>
