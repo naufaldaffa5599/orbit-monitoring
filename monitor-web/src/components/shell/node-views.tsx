@@ -1,9 +1,9 @@
-import { Activity, Globe, ListTree, Settings, SquareTerminal } from "lucide-react"
+import { Activity, FolderTree, Globe, ListTree, Settings, SquareTerminal } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { TreeNode } from "@/types"
 
 /** Which page of a node is open. */
-export type NodeView = "summary" | "services" | "tasks" | "apps" | "shell"
+export type NodeView = "summary" | "services" | "tasks" | "apps" | "files" | "shell"
 
 export interface Selection {
   nodeId: string
@@ -15,6 +15,7 @@ export const VIEW_META: Record<NodeView, { label: string; icon: typeof Activity 
   services: { label: "Services", icon: Settings },
   tasks: { label: "Task Manager", icon: ListTree },
   apps: { label: "Apps", icon: Globe },
+  files: { label: "Files", icon: FolderTree },
   shell: { label: "Shell", icon: SquareTerminal },
 }
 
@@ -37,6 +38,9 @@ export function viewsFor(node: TreeNode): NodeView[] {
   if (node.can_services) views.push("services")
   if (node.can_tasks) views.push("tasks")
   views.push("apps")
+  // Files rides the same SSH credentials as the shell, so the two appear and
+  // disappear together.
+  if (node.can_shell) views.push("files")
   if (node.can_shell) views.push("shell")
   return views
 }

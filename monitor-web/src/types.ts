@@ -368,6 +368,43 @@ export interface AuthStatus {
   authenticated: boolean
 }
 
+/** files.go — satu baris di daftar file. `path` selalu absolut dan sudah
+ *  dibersihkan server, jadi klien nggak pernah nyusun path sendiri.
+ *  Buat symlink, `dir` dan `size` ikut target-nya — biar klik di UI tahu
+ *  bakal masuk folder atau buka file. */
+export interface FileEntry {
+  name: string
+  path: string
+  dir: boolean
+  size: number
+  /** Bentuk "drwxr-xr-x", apa adanya dari server. */
+  mode: string
+  mtime: number
+  symlink?: boolean
+  target?: string
+}
+
+/** files.go — isi satu folder. `parent` kosong berarti sudah di root. */
+export interface FileListing {
+  path: string
+  parent: string
+  entries: FileEntry[]
+}
+
+/** files.go — isi file teks buat editor. Server nolak file biner dan yang
+ *  lebih besar dari batas editor, jadi `content` selalu utuh. */
+export interface FileRead {
+  path: string
+  content: string
+  size: number
+  mtime: number
+  mode: string
+  /** Ejaan byte file aslinya — "utf-8" | "utf-8-bom" | "utf-16le" | "utf-16be".
+   *  Dikirim balik apa adanya waktu simpan, biar desktop.ini Windows yang
+   *  UTF-16 nggak diam-diam berubah jadi UTF-8. */
+  encoding: string
+}
+
 /** notify.go — status webhook notifikasi. URL-nya sendiri nggak pernah
  *  dikirim ke klien; itu kredensial. */
 export interface NotifyStatus {

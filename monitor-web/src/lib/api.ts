@@ -10,6 +10,8 @@ import type {
   DeviceCreate,
   DeviceInfo,
   DeviceStatusMap,
+  FileListing,
+  FileRead,
   ProcessDetail,
   ProcessesResponse,
   ProcessSort,
@@ -73,6 +75,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(res.status, body?.detail || `HTTP ${res.status}`)
   }
   return (await res.json()) as T
+}
+
+/** Every file route hangs off one node, so the prefix is built once. */
+function filesBase(nodeId: string) {
+  return `/api/nodes/${encodeURIComponent(nodeId)}/files`
 }
 
 export const api = {
@@ -179,6 +186,64 @@ export const api = {
       `/api/nodes/${encodeURIComponent(nodeId)}/processes/${pid}/kill`,
       { method: "POST" },
     ),
+
+  // ── Files ─────────────────────────────────────────────────────────────
+  // An empty path means "wherever this login lands", which the server
+  // resolves — the client never guesses at a home directory.
+  files: {
+    list: (nodeId: string, path: string) =>
+      request<FileListing>(`${filesBase(nodeId)}?path=${encodeURIComponent(path)}`),
+    read: (nodeId: string, path: string) =>
+      request<FileRead>(`${filesBase(nodeId)}/read?path=${encodeURIComponent(path)}`),
+    write: (nodeId: string, path: string, content: string, encoding: string) =>
+      request<{ path: string; size: number; mtime: number }>(
+        `${filesBase(nodeId)}/write`,
+        { method: "PUT", body: JSON.stringify({ path, content, encoding }) },
+      ),
+    mkdir: (nodeId: string, path: string) =>
+      request<{ path: string }>(`${filesBase(nodeId)}/mkdir`, {
+        method: "POST",
+        body: JSON.stringify({ path }),
+      }),
+    copy: (nodeId: string, from: string, to: string) =>
+      request<{ path: string }>(`${filesBase(nodeId)}/copy`, {
+        method: "POST",
+        body: JSON.stringify({ from, to }),
+      }),
+    move: (nodeId: string, from: string, to: string) =>
+      request<{ path: string }>(`${filesBase(nodeId)}/move`, {
+        method: "POST",
+        body: JSON.stringify({ from, to }),
+      }),
+    remove: (nodeId: string, path: string, recursive: boolean) =>
+      request<{ ok: boolean }>(
+        `${filesBase(nodeId)}?path=${encodeURIComponent(path)}${recursive ? "&recursive=1" : ""}`,
+        { method: "DELETE" },
+      ),
+    /** A plain URL rather than a fetch: the browser streams the download
+     *  itself, so a disk image never passes through JS memory. */
+    downloadUrl: (nodeId: string, path: string) =>
+      `${filesBase(nodeId)}/download?path=${encodeURIComponent(path)}`,
+    /** Same bytes, served with a real image type so an <img> can draw them
+     *  instead of the browser offering to save the file. */
+    previewUrl: (nodeId: string, path: string) =>
+      `${filesBase(nodeId)}/download?path=${encodeURIComponent(path)}&inline=1`,
+    upload: async (nodeId: string, dir: string, files: File[]) => {
+      const body = new FormData()
+      for (const f of files) body.append("file", f, f.name)
+      // No Content-Type header: the browser has to set the multipart
+      // boundary, and naming the type by hand leaves it off.
+      const res = await fetch(
+        `${filesBase(nodeId)}/upload?path=${encodeURIComponent(dir)}`,
+        { method: "POST", body },
+      )
+      if (!res.ok) {
+        const b = (await res.json().catch(() => null)) as ApiErrorBody | null
+        throw new ApiError(res.status, b?.detail || `HTTP ${res.status}`)
+      }
+      return (await res.json()) as { path: string; written: string[] }
+    },
+  },
 
   router9Usage: () => request<Router9UsageResponse>("/api/router9/usage"),
 

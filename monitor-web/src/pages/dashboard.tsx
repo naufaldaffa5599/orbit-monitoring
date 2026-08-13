@@ -12,6 +12,7 @@ import { NodeActions } from "@/components/nodes/node-actions"
 import { NodeSummaryView } from "@/components/nodes/node-summary"
 import { NodeServicesView } from "@/components/nodes/node-services"
 import { NodeTasksView } from "@/components/nodes/node-tasks"
+import { NodeFilesView } from "@/components/nodes/node-files"
 import { NodeAppsView } from "@/components/nodes/node-apps"
 import { NodeShellView } from "@/components/nodes/node-shell"
 import { Router9View } from "@/components/nodes/node-router9"
@@ -128,6 +129,8 @@ export function Dashboard({ onLogout }: { onLogout?: () => void }) {
           <NodeTasksView key={selected.id} node={selected} />
         ) : view === "apps" ? (
           <NodeAppsView key={selected.id} node={selected} />
+        ) : view === "files" ? (
+          <NodeFilesView key={selected.id} node={selected} />
         ) : view === "shell" ? (
           <NodeShellView key={selected.id} node={selected} />
         ) : selected.kind === "router9" ? (
