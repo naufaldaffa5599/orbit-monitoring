@@ -11,7 +11,7 @@ password tiap kali, tambahkan rule sudo yang **dibatasi ketat** — cuma boleh
 ## Install
 
 ```bash
-sudo install -m 0440 /home/daffa/projects/monitoring/monitor-api/monitor-api-services.sudoers /etc/sudoers.d/monitor-api-services
+sudo install -m 0440 /home/daffa/projects/orbit-monitoring/monitor-api/monitor-api-services.sudoers /etc/sudoers.d/monitor-api-services
 sudo visudo -c
 ```
 

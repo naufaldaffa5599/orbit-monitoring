@@ -9,13 +9,13 @@ Wants=network-online.target
 [Service]
 Type=simple
 User=daffa
-WorkingDirectory=/home/daffa/projects/monitoring/monitor-api-go
+WorkingDirectory=/home/daffa/projects/orbit-monitoring/monitor-api-go
 
 # devices.json is resolved from WorkingDirectory, and the frontend from its
 # sibling ../monitor-app. Both can be overridden with MONITOR_DIR /
 # FRONTEND_DIR if the layout ever changes.
-EnvironmentFile=-/home/daffa/projects/monitoring/monitor-api-go/.env
-ExecStart=/home/daffa/projects/monitoring/monitor-api-go/monitor-api
+EnvironmentFile=-/home/daffa/projects/orbit-monitoring/monitor-api-go/.env
+ExecStart=/home/daffa/projects/orbit-monitoring/monitor-api-go/monitor-api
 
 Restart=always
 RestartSec=5

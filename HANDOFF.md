@@ -4,7 +4,7 @@ Paste this whole file as the opening message ke agent baru.
 
 ---
 
-Gua lagi ngelanjutin project **Orbit** di `/home/daffa/projects/monitoring`.
+Gua lagi ngelanjutin project **Orbit** di `/home/daffa/projects/orbit-monitoring`.
 Dashboard buat ngontrol dan mantau homelab gua: satu host Proxmox, VM-VM di
 atasnya, plus beberapa mesin fisik (Windows). Disajikan di subdomain `moon`.
 Baca dulu semuanya di bawah sebelum ngoding — banyak jebakan di lingkungan ini

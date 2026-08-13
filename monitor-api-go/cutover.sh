@@ -8,8 +8,8 @@
 # fails, the old unit is restored and nothing is deleted.
 set -euo pipefail
 
-GO_DIR=/home/daffa/projects/monitoring/monitor-api-go
-PY_DIR=/home/daffa/projects/monitoring/monitor-api
+GO_DIR=/home/daffa/projects/orbit-monitoring/monitor-api-go
+PY_DIR=/home/daffa/projects/orbit-monitoring/monitor-api
 UNIT=/etc/systemd/system/monitor-api.service
 UNIT_BAK=/etc/systemd/system/monitor-api.service.python.bak
 PORT=8585
